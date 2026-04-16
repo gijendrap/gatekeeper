@@ -16,6 +16,11 @@ DEFAULT_SECRETS = {
     "AWS Access Key ID": r"(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}",
     "Google Cloud API Key": r"AIza[0-9A-Za-z\-_]{35}",
     
+    # --- Cloud Storage URLs (Anthropic Scenario) ---
+    "AWS S3 Bucket": r"[a-zA-Z0-9_\-\.]+\.s3\.amazonaws\.com",
+    "Cloudflare R2 Bucket": r"[a-zA-Z0-9_\-\.]+\.r2\.cloudflarestorage\.com",
+    "Google Cloud Storage": r"storage\.googleapis\.com/[a-zA-Z0-9_\-\.]+",
+    
     # --- Version Control ---
     "GitHub Token": r"gh[pousr]_[a-zA-Z0-9]{36}",
     "GitLab Personal Access Token": r"glpat-[a-zA-Z0-9\-]{20}",
@@ -39,6 +44,8 @@ DEFAULT_SECRETS = {
     "Private Key Block": r"-----BEGIN (RSA|EC|DSA|OPENSSH|PGP|PRIVATE) KEY(?: BLOCK)?-----",
 }
 
+ABSOLUTE_BANNED_EXTENSIONS = {".map", ".env", ".pem", ".key", ".log", ".p8"}
+
 def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[str]:
     """
     Stage 1: Validates that all outgoing_files are explicitly whitelisted.
@@ -51,6 +58,13 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[st
         is_safe = False
         # Normalize file separators for comparison
         norm_f = Path(f).as_posix()
+        
+        # Immediate Hard-Ban Check: Certain extensions are universally forbidden regardless of UI selection
+        if Path(f).suffix.lower() in ABSOLUTE_BANNED_EXTENSIONS:
+            blocked_files.append(norm_f)
+            console.print(f"[bold red]🚫 CRITICAL BAN:[/bold red] {norm_f} contains a forbidden file extension!")
+            continue
+            
         for allowed in whitelist:
             norm_a = Path(allowed).as_posix()
             # If the whitelist allows the root directory (.), everything inside is safe.
