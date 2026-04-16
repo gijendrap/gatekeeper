@@ -1,5 +1,8 @@
 {
   "public_whitelist": [
-    "."
+    "ssss.txt",
+    "pyproject.toml",
+    ".gatekeeper.json",
+    "src"
   ]
 }

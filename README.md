@@ -10,7 +10,7 @@ Built to prevent incidents like the [Anthropic Claude Code Leak](https://www.the
 ## 🚀 Quick Start Guide
 
 ### 1. Global Installation
-Install GateKeeper globally on your machine using Python's package manager:
+Install GateKeeper globally on your machine using Python'ss package manager:
 ```bash
 pip install gatekeeper-cli
 ```
