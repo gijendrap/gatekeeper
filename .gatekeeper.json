@@ -1,19 +1,22 @@
 {
   "public": [
-    "src/gatekeeper/cli.py",
-    "src/gatekeeper/installer.py",
-    "src/gatekeeper/context.py",
     "sdfd.txt",
-    ".gatekeeper.json",
-    "src/gatekeeper/config.py",
-    "src/gatekeeper/shims.py",
     "README.md",
-    "wscd.js",
-    "src/gatekeeper/__init__.py",
     "sdf.txt",
-    "pyproject.toml",
+    "src/gatekeeper/__init__.py",
+    "src/gatekeeper/installer.py",
     "src/gatekeeper/evaluator.py",
-    "src/gatekeeper/tui.py"
+    "src/gatekeeper",
+    "src/gatekeeper/tui.py",
+    "wscd.js",
+    "src",
+    "src/gatekeeper/context.py",
+    "pyproject.toml",
+    "src/gatekeeper/shims.py",
+    "dsd.js",
+    ".gatekeeper.json",
+    "src/gatekeeper/cli.py",
+    "src/gatekeeper/config.py"
   ],
   "private": []
 }
