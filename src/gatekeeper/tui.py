@@ -111,15 +111,29 @@ class GateKeeperTUI(App):
         path = node.data
         rel_path = os.path.relpath(path, self.project_root)
         
-        # Toggle logic
-        if rel_path in tree.whitelisted_paths:
-            tree.whitelisted_paths.remove(rel_path)
-            # Recursively remove children if a parent is un-whitelisted? To be complete.
-        else:
-            tree.whitelisted_paths.add(rel_path)
+        # Determine if we are making it public or private based on the parent node's current state
+        is_now_public = rel_path not in tree.whitelisted_paths
+        
+        # Recursive function to update the targeted node and all nested children
+        def update_node_and_descendants(target_node: TreeNode, make_public: bool):
+            p = target_node.data
+            if not p:
+                return
+                
+            r_path = os.path.relpath(p, self.project_root)
+            if make_public:
+                tree.whitelisted_paths.add(r_path)
+            else:
+                tree.whitelisted_paths.discard(r_path)
+                
+            target_node.refresh()
             
-        # Refresh the node label
-        node.refresh()
+            # Recurse through children
+            for child in target_node.children:
+                update_node_and_descendants(child, make_public)
+                
+        # Apply the toggle to this node and everything inside it
+        update_node_and_descendants(node, is_now_public)
 
     def action_save_and_exit(self) -> None:
         """Save the current whitelist and exit."""
