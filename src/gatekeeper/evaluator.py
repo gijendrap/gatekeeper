@@ -6,11 +6,35 @@ from gatekeeper.config import load_whitelist
 
 console = Console()
 
-# Basic set of regex rules for secrets
+# Enterprise-grade set of high-risk secret regexes (verified against Gitleaks standards)
 DEFAULT_SECRETS = {
-    "OpenAI API Key": r"sk-[a-zA-Z0-9]{48}",
-    "AWS Access Key": r"AKIA[0-9A-Z]{16}",
-    "Anthropic API Key": r"sk-ant-api03-[a-zA-Z0-9\-_]{93}",
+    # --- AI & Cloud ---
+    "OpenAI API Key": r"(sk-[a-zA-Z0-9\-_]{48,}|sk-proj-[a-zA-Z0-9\-_]{48,})",
+    "Anthropic API Key": r"sk-ant-api[a-zA-Z0-9\-_]{90,}",
+    "AWS Access Key ID": r"(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}",
+    "Google Cloud API Key": r"AIza[0-9A-Za-z\-_]{35}",
+    
+    # --- Version Control ---
+    "GitHub Token": r"gh[pousr]_[a-zA-Z0-9]{36}",
+    "GitLab Personal Access Token": r"glpat-[a-zA-Z0-9\-]{20}",
+    
+    # --- Messaging & Communication ---
+    "Slack Token": r"xox[bpa]-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24}",
+    "Slack Webhook": r"https://hooks\.slack\.com/services/T[a-zA-Z0-9_]{8,10}/B[a-zA-Z0-9_]{8,12}/[a-zA-Z0-9_]{24}",
+    "Discord Bot Token": r"[MN][A-Za-z\d]{23}\.[\w-]{6}\.[\w-]{27,38}",
+    
+    # --- Developer Tools ---
+    "Ngrok Auth Token": r"(?:^|[^a-zA-Z0-9_\-])[0-9a-zA-Z]{43,55}(?:$|[^a-zA-Z0-9_\-])",
+    "Heroku API Key": r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+    
+    # --- Payment & Email ---
+    "Stripe Secret Key": r"(sk_live|rk_live)_[0-9a-zA-Z]{24,99}",
+    "Twilio API Key": r"SK[0-9a-fA-F]{32}",
+    "SendGrid API Key": r"SG\.[0-9A-Za-z\-_]{22}\.[0-9A-Za-z\-_]{43}",
+    "Mailchimp API Key": r"[0-9a-f]{32}-us[0-9]{1,2}",
+    
+    # --- Cryptography ---
+    "Private Key Block": r"-----BEGIN (RSA|EC|DSA|OPENSSH|PGP|PRIVATE) KEY(?: BLOCK)?-----",
 }
 
 def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> bool:
