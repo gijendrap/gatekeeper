@@ -1,3 +1,5 @@
 {
-  "public_whitelist": []
+  "public_whitelist": [
+    "."
+  ]
 }
