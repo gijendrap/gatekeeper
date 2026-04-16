@@ -17,9 +17,21 @@ class DirectoryTree(Tree):
     def on_mount(self) -> None:
         """Load initial whitelist when mounted."""
         self.whitelisted_paths = load_whitelist(self.project_root)
-        # Purge invisible wildcards so the exact UI selections display accurately
-        self.whitelisted_paths.discard(".")
-        self.whitelisted_paths.discard("")
+        
+        # If the user previously selected Option 1 (All Public), it saved a "." wildcard.
+        # We must discard it so the interactive engine works, but we also must visually 
+        # translate that wildcard into explicit selections so the UI starts completely Green!
+        if "." in self.whitelisted_paths or "" in self.whitelisted_paths:
+            self.whitelisted_paths.discard(".")
+            self.whitelisted_paths.discard("")
+            
+            ignore_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__"}
+            try:
+                for entry in self.project_root.iterdir():
+                    if entry.name not in ignore_dirs:
+                        self.whitelisted_paths.add(entry.name)
+            except PermissionError:
+                pass
 
     def on_key(self, event: Key) -> None:
         """Intercept spacebar to only toggle whitelist, and stop it from expanding."""

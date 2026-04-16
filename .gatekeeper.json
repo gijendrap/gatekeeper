@@ -1,6 +1,5 @@
 {
   "public_whitelist": [
-    "README.md",
-    ".gatekeeper.json"
+    "pyproject.toml"
   ]
 }
