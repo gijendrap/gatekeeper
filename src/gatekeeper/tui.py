@@ -17,6 +17,9 @@ class DirectoryTree(Tree):
     def on_mount(self) -> None:
         """Load initial whitelist when mounted."""
         self.whitelisted_paths = load_whitelist(self.project_root)
+        # Purge invisible wildcards so the exact UI selections display accurately
+        self.whitelisted_paths.discard(".")
+        self.whitelisted_paths.discard("")
 
     def on_key(self, event: Key) -> None:
         """Intercept spacebar to only toggle whitelist, and stop it from expanding."""
@@ -35,7 +38,14 @@ class DirectoryTree(Tree):
         if getattr(node, "is_root", False) or not path:
             return label
             
-        status = "  [🟢 PUBLIC]" if rel_path in self.whitelisted_paths else "  [🔴 PRIVATE]"
+        def is_path_public(p: str) -> bool:
+            if p in self.whitelisted_paths: return True
+            for parent in Path(p).parents:
+                if str(parent).replace("\\", "/") in [x.replace("\\", "/") for x in self.whitelisted_paths]:
+                    return True
+            return False
+            
+        status = "  [🟢 PUBLIC]" if is_path_public(rel_path) else "  [🔴 PRIVATE]"
         label.append(status)
         return label
 
@@ -111,7 +121,18 @@ class GateKeeperTUI(App):
         path = node.data
         rel_path = os.path.relpath(path, self.project_root)
         
-        # Determine if we are making it public or private based on the parent node's current state
+        # Prevent UI desync: A child cannot be toggled to Private if the parent folder is explicitly Public!
+        is_parent_public = False
+        for parent in Path(rel_path).parents:
+            if str(parent).replace("\\", "/") in [x.replace("\\", "/") for x in tree.whitelisted_paths]:
+                is_parent_public = True
+                break
+                
+        if is_parent_public:
+            self.bell()
+            return
+        
+        # Determine if we are making it public or private based on the current state
         is_now_public = rel_path not in tree.whitelisted_paths
         
         # Recursive function to update the targeted node and all nested children
