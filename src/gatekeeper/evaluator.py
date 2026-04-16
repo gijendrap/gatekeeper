@@ -75,7 +75,6 @@ def scan_for_secrets(project_root: Path, outgoing_files: List[str]) -> bool:
     """
     Stage 2: Scans whitelisted outgoing files for secrets.
     """
-    import mimetypes
     console.print("[cyan]Running Deep Secret Scan...[/cyan]")
     found_secrets = False
     
@@ -84,25 +83,27 @@ def scan_for_secrets(project_root: Path, outgoing_files: List[str]) -> bool:
     for f in outgoing_files:
         filepath = project_root / f
         if filepath.exists() and filepath.is_file():
-            # Fix 1: Skip massive files (> 5MB) to prevent in-memory regex loading (OOM Risk)
+            # OOM Risk check: Skip massive files (>5MB)
             if filepath.stat().st_size > 5_000_000:
-                console.print(f"[dim]Skipping massive file (>5MB): {f}[/dim]")
                 continue
                 
-            # Fix 2: Prevent eager CPU spikes by quickly guessing binary formats instead of trying to decode them
-            mime_type, _ = mimetypes.guess_type(str(filepath))
-            if mime_type and not mime_type.startswith("text/") and mime_type not in ["application/json", "application/xml"]:
-                continue
+            # CPU Spike check: Sniff for binary null bytes before attempting to decode everything into a massive text buffer
+            try:
+                with open(filepath, "rb") as bf:
+                    if b"\0" in bf.read(1024):
+                        continue
+            except Exception:
+                pass
                 
             try:
-                content = filepath.read_text(encoding="utf-8", errors="ignore")
+                content = filepath.read_text(encoding="utf-8")
                 for name, compiled_regex in patterns.items():
                     if compiled_regex.search(content):
                         console.print(f"[bold red]💥 SECRET LEAK DETECTED 💥[/bold red]")
                         console.print(f"[red]Found '{name}' in {f}[/red]")
                         found_secrets = True
-            except Exception:
-                pass
+            except UnicodeDecodeError:
+                pass # skip edge-case binary files that didn't have null bytes
                 
     if found_secrets:
         return False

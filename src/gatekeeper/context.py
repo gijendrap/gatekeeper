@@ -15,8 +15,10 @@ def get_ignored_paths(project_root: Path) -> Set[str]:
         with open(gitignore_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if line and not line.startswith("#"):
-                    ignored.add(line)
+                # Safely ignore blank lines, comments, and explicit negation logic from legacy parsers
+                if not line or line.startswith("#") or line.startswith("!"):
+                    continue
+                ignored.add(line)
     return ignored
 
 def check_package_json_private(project_root: Path) -> bool:
