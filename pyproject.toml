@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gatekeeper-cli"
+version = "0.1.0"
+description = "Zero-Trust Pre-Publish Firewall"
+authors = [
+    { name = "GateKeeper Authors", email = "author@example.com" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "textual>=0.40.0",
+]
+
+[project.scripts]
+gatekeeper = "gatekeeper.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gatekeeper"]
