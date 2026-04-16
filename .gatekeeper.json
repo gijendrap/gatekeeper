@@ -1,5 +1,17 @@
 {
-  "public_whitelist": [
-    "."
-  ]
+  "public": [
+    "pyproject.toml",
+    "sdfd.txt",
+    "src/gatekeeper/installer.py",
+    ".gatekeeper.json",
+    "src/gatekeeper/tui.py",
+    "src/gatekeeper/cli.py",
+    "src/gatekeeper/evaluator.py",
+    "src/gatekeeper/shims.py",
+    "src/gatekeeper/context.py",
+    "src/gatekeeper/__init__.py",
+    "README.md",
+    "src/gatekeeper/config.py"
+  ],
+  "private": []
 }

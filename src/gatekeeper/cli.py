@@ -13,7 +13,7 @@ def init():
     from pathlib import Path
     from gatekeeper.context import analyze_context
     from gatekeeper.tui import GateKeeperTUI
-    from gatekeeper.config import GATEKEEPER_CONFIG_FILE, save_whitelist
+    from gatekeeper.config import save_config
     
     console.print("[bold green]Analyzing context...[/bold green]")
     project_root = Path(os.getcwd())
@@ -25,7 +25,7 @@ def init():
         
     console.print(f"[cyan]Found {len(context_data['ignored_patterns'])} ignore patterns.[/cyan]")
     
-    config_path = project_root / GATEKEEPER_CONFIG_FILE
+    config_path = project_root / ".gatekeeper.json"
     
     console.print("\n[bold yellow]GateKeeper Initialization[/bold yellow]")
     console.print("How would you like to configure this project?")
@@ -36,12 +36,27 @@ def init():
     choice = typer.prompt("Choose an option (1/2/3)", type=int)
     
     if choice == 1:
-        save_whitelist(project_root, {"."}) # "." means the root directory, making everything public
-        console.print("\n[bold green]✅ Project marked as Open-Source (All Public).[/bold green]")
+        all_files = set()
+        for root, dirs, files in os.walk(project_root):
+            if ".git" in root or "node_modules" in root or "__pycache__" in root:
+                continue
+            for f in files:
+                rel = os.path.relpath(os.path.join(root, f), project_root)
+                all_files.add(Path(rel).as_posix())
+        save_config(project_root, {"public": all_files, "private": set()})
+        console.print("\n[bold green]✅ Project marked as Open-Source (All Current Files Public).[/bold green]")
+        console.print("[yellow]Note: Any future files you create will trigger the firewall as UNASSIGNED![/yellow]")
         return
     elif choice == 2:
-        save_whitelist(project_root, set()) # Empty set means nothing is public
-        console.print("\n[bold green]✅ Project marked as Private App (All Private).[/bold green]")
+        all_files = set()
+        for root, dirs, files in os.walk(project_root):
+            if ".git" in root or "node_modules" in root or "__pycache__" in root:
+                continue
+            for f in files:
+                rel = os.path.relpath(os.path.join(root, f), project_root)
+                all_files.add(Path(rel).as_posix())
+        save_config(project_root, {"public": set(), "private": all_files})
+        console.print("\n[bold green]✅ Project marked as Private App (All Current Files Private).[/bold green]")
         return
     elif choice == 3:
         console.print("\n[dim]Proceeding to Selective Publishing...[/dim]")

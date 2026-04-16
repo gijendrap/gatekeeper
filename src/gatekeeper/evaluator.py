@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import List, Set
 from rich.console import Console
-from gatekeeper.config import load_whitelist
+from gatekeeper.config import load_config
 import typer
 import subprocess
 
@@ -51,7 +51,9 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[st
     Stage 1: Validates that all outgoing_files are explicitly whitelisted.
     Returns a list of blocked files.
     """
-    whitelist = load_whitelist(project_root)
+    state_db = load_config(project_root)
+    public_files = state_db.get("public", set())
+    
     blocked_files = []
     
     for f in outgoing_files:
@@ -65,15 +67,9 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[st
             console.print(f"[bold red]🚫 CRITICAL BAN:[/bold red] {norm_f} contains a forbidden file extension!")
             continue
             
-        for allowed in whitelist:
-            norm_a = Path(allowed).as_posix()
-            # If the whitelist allows the root directory (.), everything inside is safe.
-            if norm_a == "." or norm_a == "":
-                is_safe = True
-                break
-            if norm_f == norm_a or norm_f.startswith(f"{norm_a}/"):
-                is_safe = True
-                break
+        if norm_f in public_files:
+            is_safe = True
+            
         if not is_safe:
             blocked_files.append(norm_f)
             

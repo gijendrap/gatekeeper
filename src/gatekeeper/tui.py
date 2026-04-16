@@ -4,34 +4,28 @@ from textual.app import App, ComposeResult
 from textual.events import Key
 from textual.widgets import Header, Footer, Tree, Static
 from textual.widgets._tree import TreeNode
-from gatekeeper.config import load_whitelist, save_whitelist
+from gatekeeper.config import load_config, save_config
 
 class DirectoryTree(Tree):
     """A tree widget that displays a directory structure."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.whitelisted_paths = set()
+        self.public_paths = set()
+        self.private_paths = set()
         self.project_root = Path(os.getcwd())
 
     def on_mount(self) -> None:
-        """Load initial whitelist when mounted."""
-        self.whitelisted_paths = load_whitelist(self.project_root)
+        """Load dual-state database when mounted."""
+        state = load_config(self.project_root)
+        self.public_paths = set(state.get("public", []))
+        self.private_paths = set(state.get("private", []))
         
-        # If the user previously selected Option 1 (All Public), it saved a "." wildcard.
-        # We must discard it so the interactive engine works, but we also must visually 
-        # translate that wildcard into explicit selections so the UI starts completely Green!
-        if "." in self.whitelisted_paths or "" in self.whitelisted_paths:
-            self.whitelisted_paths.discard(".")
-            self.whitelisted_paths.discard("")
-            
-            ignore_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__"}
-            try:
-                for entry in self.project_root.iterdir():
-                    if entry.name not in ignore_dirs:
-                        self.whitelisted_paths.add(entry.name)
-            except PermissionError:
-                pass
+        # Purge any legacy wildcards
+        self.public_paths.discard(".")
+        self.public_paths.discard("")
+        self.private_paths.discard(".")
+        self.private_paths.discard("")
 
     def on_key(self, event: Key) -> None:
         """Intercept spacebar to only toggle whitelist, and stop it from expanding."""
@@ -41,23 +35,22 @@ class DirectoryTree(Tree):
             event.stop()
 
     def render_label(self, node: TreeNode, base_style, style):
-        """Format the node text with its status."""
+        """Format the node text with its strict exact status."""
         label = super().render_label(node, base_style, style).copy()
         
         path = str(node.data) if node.data else ""
-        rel_path = os.path.relpath(path, self.project_root) if path else ""
+        rel_path = Path(os.path.relpath(path, self.project_root)).as_posix() if path else ""
         
-        if getattr(node, "is_root", False) or not path:
+        if getattr(node, "is_root", False) or not path or rel_path == ".":
             return label
             
-        def is_path_public(p: str) -> bool:
-            if p in self.whitelisted_paths: return True
-            for parent in Path(p).parents:
-                if str(parent).replace("\\", "/") in [x.replace("\\", "/") for x in self.whitelisted_paths]:
-                    return True
-            return False
+        if rel_path in self.public_paths:
+            status = "  [🟢 PUBLIC]"
+        elif rel_path in self.private_paths:
+            status = "  [🔴 PRIVATE]"
+        else:
+            status = "  [⚪ UNASSIGNED]"
             
-        status = "  [🟢 PUBLIC]" if is_path_public(rel_path) else "  [🔴 PRIVATE]"
         label.append(status)
         return label
 
@@ -85,7 +78,7 @@ class GateKeeperTUI(App):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("enter", "toggle_node", "Expand/Collapse Folder"),
-        ("space", "toggle_whitelist", "Toggle Public/Private"),
+        ("space", "toggle_whitelist", "Toggle (Unassigned -> Public -> Private)"),
         ("s", "save_and_exit", "Save & Exit")
     ]
 
@@ -96,11 +89,15 @@ class GateKeeperTUI(App):
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(show_clock=False)
-        yield Static("Enter: Expand/Collapse | Space: Toggle Status | S: Save | Q: Quit\nAll files default to 🔴 PRIVATE. Explicitly mark allowed folders as 🟢 PUBLIC.", id="help-text")
+        help_msg = (
+            "Enter: Expand/Collapse | Space: Cycle Status | S: Save | Q: Quit\n"
+            "All newborn files default to ⚪ UNASSIGNED. They will trigger firewall alarms until physically approved."
+        )
+        yield Static(help_msg, id="help-text")
         
         tree: DirectoryTree[Path] = DirectoryTree("Project Filesystem")
         tree.id = "tree-view"
-        tree.root.expand() # Only expand the root folder itself so you see the top level domains
+        tree.root.expand() 
         self.populate_tree(tree.root, self.project_root)
         yield tree
         yield Footer()
@@ -115,7 +112,6 @@ class GateKeeperTUI(App):
                 if entry.name in ignore_dirs:
                     continue
                 if entry.is_dir():
-                    # explicitly declare expand=False so it shrinks/collapses folder by default
                     child = node.add(entry.name, data=entry, expand=False)
                     self.populate_tree(child, entry)
                 else:
@@ -124,55 +120,57 @@ class GateKeeperTUI(App):
             pass
 
     def action_toggle_whitelist(self) -> None:
-        """Toggle the currently selected node's status."""
+        """Cycle the currently selected node's status."""
         tree = self.query_one(DirectoryTree)
         node = tree.cursor_node
         if not node or not node.data:
             return
             
         path = node.data
-        rel_path = os.path.relpath(path, self.project_root)
+        rel_path = Path(os.path.relpath(path, self.project_root)).as_posix()
         
-        # Prevent UI desync: A child cannot be toggled to Private if the parent folder is explicitly Public!
-        is_parent_public = False
-        for parent in Path(rel_path).parents:
-            if str(parent).replace("\\", "/") in [x.replace("\\", "/") for x in tree.whitelisted_paths]:
-                is_parent_public = True
-                break
-                
-        if is_parent_public:
-            self.bell()
-            return
+        is_public = rel_path in tree.public_paths
+        is_private = rel_path in tree.private_paths
         
-        # Determine if we are making it public or private based on the current state
-        is_now_public = rel_path not in tree.whitelisted_paths
+        if is_public:
+            next_state = "private"
+        elif is_private:
+            next_state = "unassigned"
+        else:
+            next_state = "public"
         
-        # Recursive function to update the targeted node and all nested children
-        def update_node_and_descendants(target_node: TreeNode, make_public: bool):
+        def apply_state(target_node: TreeNode):
             p = target_node.data
             if not p:
                 return
                 
-            r_path = os.path.relpath(p, self.project_root)
-            if make_public:
-                tree.whitelisted_paths.add(r_path)
+            r = Path(os.path.relpath(p, self.project_root)).as_posix()
+            
+            if next_state == "public":
+                tree.public_paths.add(r)
+                tree.private_paths.discard(r)
+            elif next_state == "private":
+                tree.private_paths.add(r)
+                tree.public_paths.discard(r)
             else:
-                tree.whitelisted_paths.discard(r_path)
+                tree.public_paths.discard(r)
+                tree.private_paths.discard(r)
                 
             target_node.refresh()
-            
-            # Recurse through children
             for child in target_node.children:
-                update_node_and_descendants(child, make_public)
+                apply_state(child)
                 
-        # Apply the toggle to this node and everything inside it
-        update_node_and_descendants(node, is_now_public)
+        apply_state(node)
 
     def action_save_and_exit(self) -> None:
-        """Save the current whitelist and exit."""
+        """Save the dual-state config and exit."""
         tree = self.query_one(DirectoryTree)
-        save_whitelist(self.project_root, tree.whitelisted_paths)
-        self.exit(message="Whitelist saved successfully.")
+        state = {
+            "public": tree.public_paths,
+            "private": tree.private_paths
+        }
+        save_config(self.project_root, state)
+        self.exit(message="Whitelist configuration saved successfully.")
 
 if __name__ == "__main__":
     app = GateKeeperTUI()
