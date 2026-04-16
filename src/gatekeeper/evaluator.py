@@ -28,6 +28,10 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> bool:
         norm_f = Path(f).as_posix()
         for allowed in whitelist:
             norm_a = Path(allowed).as_posix()
+            # If the whitelist allows the root directory (.), everything inside is safe.
+            if norm_a == "." or norm_a == "":
+                is_safe = True
+                break
             if norm_f == norm_a or norm_f.startswith(f"{norm_a}/"):
                 is_safe = True
                 break
