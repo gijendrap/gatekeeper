@@ -1,5 +1,17 @@
 {
   "public_whitelist": [
-    "."
+    "src\\gatekeeper\\shims.py",
+    "src\\gatekeeper\\__init__.py",
+    "src\\gatekeeper\\context.py",
+    "src\\gatekeeper\\tui.py",
+    "src\\gatekeeper",
+    "pyproject.toml",
+    ".",
+    "src\\gatekeeper\\cli.py",
+    "src\\gatekeeper\\installer.py",
+    "src\\gatekeeper\\evaluator.py",
+    "src",
+    ".gatekeeper.json",
+    "src\\gatekeeper\\config.py"
   ]
 }
