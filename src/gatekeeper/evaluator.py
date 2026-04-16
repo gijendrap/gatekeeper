@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import List, Set
 from rich.console import Console
 from gatekeeper.config import load_whitelist
+import typer
+import subprocess
 
 console = Console()
 
@@ -37,13 +39,12 @@ DEFAULT_SECRETS = {
     "Private Key Block": r"-----BEGIN (RSA|EC|DSA|OPENSSH|PGP|PRIVATE) KEY(?: BLOCK)?-----",
 }
 
-def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> bool:
+def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[str]:
     """
     Stage 1: Validates that all outgoing_files are explicitly whitelisted.
-    Returns False if a forbidden file is found.
+    Returns a list of blocked files.
     """
     whitelist = load_whitelist(project_root)
-    
     blocked_files = []
     
     for f in outgoing_files:
@@ -62,14 +63,7 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> bool:
         if not is_safe:
             blocked_files.append(norm_f)
             
-    if blocked_files:
-        console.print("[bold red]🚨 IP LEAK DETECTED 🚨[/bold red]")
-        console.print("[red]The following files are NOT whitelisted but were found in the outgoing payload:[/red]")
-        for b in blocked_files:
-            console.print(f"  ❌ {b}")
-        return False
-        
-    return True
+    return blocked_files
 
 def scan_for_secrets(project_root: Path, outgoing_files: List[str]) -> bool:
     """
@@ -110,7 +104,7 @@ def scan_for_secrets(project_root: Path, outgoing_files: List[str]) -> bool:
         
     return True
     
-def evaluate_payload(project_root: Path, outgoing_files: List[str]) -> bool:
+def evaluate_payload(project_root: Path, outgoing_files: List[str], command: str = "git-push") -> bool:
     """
     Runs the two-stage evaluation line.
     """
@@ -118,8 +112,47 @@ def evaluate_payload(project_root: Path, outgoing_files: List[str]) -> bool:
         console.print("[yellow]No outgoing files to check.[/yellow]")
         return True
         
-    if not check_ip_whitelist(project_root, outgoing_files):
-        return False
+    blocked_files = check_ip_whitelist(project_root, outgoing_files)
+    
+    if blocked_files:
+        console.print("[bold red]🚨 IP LEAK DETECTED 🚨[/bold red]")
+        console.print("[red]The following files are NOT whitelisted but were found in the outgoing payload:[/red]")
+        for b in blocked_files:
+            console.print(f"  ❌ {b}")
+            
+        if command == "git-push":
+            console.print("\n[bold yellow]Do you want to strip these private files from the payload and push ONLY the public files?[/bold yellow]")
+            if typer.confirm("Automatically remove private files from this commit?"):
+                console.print("[cyan]Applying Git Amendments...[/cyan]")
+                for b in blocked_files:
+                    subprocess.run(["git", "rm", "--cached", "-r", "--ignore-unmatch", b], cwd=project_root, capture_output=True)
+                    
+                res = subprocess.run(["git", "commit", "--amend", "--no-edit"], cwd=project_root, capture_output=True)
+                if res.returncode != 0:
+                    console.print("[bold red]Fatal Error: Could not amend commit. These files might be scattered across multiple unpushed commits. Please manually rebase or un-commit them.[/bold red]")
+                    return False
+                
+                console.print("[bold green]✅ Private files safely stripped from your commit![/bold green]")
+                outgoing_files = [f for f in outgoing_files if Path(f).as_posix() not in blocked_files]
+            else:
+                return False
+                
+        elif command == "npm-publish":
+            console.print("\n[bold yellow]Do you want to dynamically ignore these private files for this npm publish?[/bold yellow]")
+            if typer.confirm("Automatically append them to .npmignore?"):
+                with open(project_root / ".npmignore", "a", encoding="utf-8") as f:
+                    for b in blocked_files:
+                        f.write(f"\n{b}\n")
+                console.print("[bold green]✅ Private files safely appended to .npmignore![/bold green]")
+                outgoing_files = [f for f in outgoing_files if Path(f).as_posix() not in blocked_files]
+            else:
+                return False
+        else:
+            return False
+
+    if not outgoing_files:
+        console.print("[yellow]No public files remain to check.[/yellow]")
+        return True
         
     if not scan_for_secrets(project_root, outgoing_files):
         return False

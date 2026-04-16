@@ -88,7 +88,7 @@ def check(command: str = typer.Argument(..., help="The command to check (e.g. np
         console.print(f"[yellow]Unknown interception command: {command}[/yellow]")
         raise typer.Exit(code=1)
         
-    if not evaluate_payload(project_root, outgoing_files):
+    if not evaluate_payload(project_root, outgoing_files, command):
         console.print(f"\n[bold red]❌ {command.upper()} ABORTED BY GATEKEEPER.[/bold red]")
         raise typer.Exit(code=1)
         
