@@ -1,7 +1,8 @@
 {
   "public_whitelist": [
-    ".gatekeeper.json",
+    "README.md",
     "pyproject.toml",
-    "src"
+    "src",
+    ".gatekeeper.json"
   ]
 }
