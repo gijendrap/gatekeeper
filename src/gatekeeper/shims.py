@@ -43,19 +43,24 @@ def get_git_push_files(project_root: Path) -> List[str]:
         if result.returncode == 0 and result.stdout.strip():
             return [line.strip() for line in result.stdout.splitlines() if line.strip()]
             
-        # fallback: get all files tracked in current tree (just as a failsafe test)
+        # Fallback 1: Try against origin/main or origin/master if no upstream is set yet
+        for base in ["origin/main", "origin/master"]:
+            fallback_res = subprocess.run(
+                ["git", "diff", "--name-only", f"{base}...HEAD"],
+                cwd=project_root, capture_output=True, text=True, shell=True
+            )
+            if fallback_res.returncode == 0 and fallback_res.stdout.strip():
+                return [line.strip() for line in fallback_res.stdout.splitlines() if line.strip()]
+
+        # Fallback 2: Check the latest commit only (prevents locking up the terminal on a massive repo)
+        commit_res = subprocess.run(["git", "diff", "--name-only", "HEAD~1..HEAD"], cwd=project_root, capture_output=True, text=True, shell=True)
+        if commit_res.returncode == 0 and commit_res.stdout.strip():
+            return [line.strip() for line in commit_res.stdout.splitlines() if line.strip()]
+            
+        # Fallback 3: Get all files tracked in current tree (only if repo has 1 root commit)
         fallback = subprocess.run(["git", "ls-files"], cwd=project_root, capture_output=True, text=True, shell=True)
         if fallback.returncode == 0:
             return [line.strip() for line in fallback.stdout.splitlines() if line.strip()]
     except Exception:
         pass
     return []
-
-def execute_original_command(command_str: str, args: List[str]):
-    """
-    If gatekeeper clears the operation, we pass it along to the real binary.
-    """
-    # For a real shim, we'd need the path to the original binary to avoid infinite loops,
-    # or an environment variable flag.
-    # For now, we mock success.
-    pass
