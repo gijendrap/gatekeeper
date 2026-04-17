@@ -1,6 +1,11 @@
 {
   "public_whitelist": [
-    "."
+    "pyproject.toml",
+    "README.md",
+    ".gatekeeper.json",
+    "src"
   ],
-  "private_blacklist": []
+  "private_blacklist": [
+    "src/gatekeeper/cli.py"
+  ]
 }
