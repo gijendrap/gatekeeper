@@ -150,13 +150,18 @@ class GateKeeperTUI(App):
         )
         yield Static(help_msg, id="help-text", markup=True)
         
-        tree: DirectoryTree[Path] = DirectoryTree("📁 Project Vault")
+        tree: DirectoryTree = DirectoryTree("📁 Project Vault")
         tree.id = "tree-view"
         tree.root.expand() 
         self.populate_tree(tree.root, self.project_root)
         yield tree
         yield Footer()
 
+    def on_mount(self) -> None:
+        """Establish initial focus and scroll position."""
+        tree = self.query_one(DirectoryTree)
+        tree.focus()
+        
     def populate_tree(self, node: TreeNode, path: Path) -> None:
         """Recursively populate the file tree, ignoring common large dirs."""
         ignore_dirs = {".git", "node_modules", ".venv", "venv"}
