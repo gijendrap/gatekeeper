@@ -1,16 +1,6 @@
 {
   "public_whitelist": [
-    "src/gatekeeper/__pycache__/context.cpython-312.pyc",
-    "README.md",
-    "src/gatekeeper/__pycache__/cli.cpython-312.pyc",
-    "src/gatekeeper/__pycache__/config.cpython-312.pyc",
-    "src/gatekeeper/cli.py"
+    "."
   ],
-  "private_blacklist": [
-    "src/gatekeeper",
-    "src",
-    ".gatekeeper.json",
-    "pyproject.toml",
-    "src/gatekeeper/__pycache__"
-  ]
+  "private_blacklist": []
 }
