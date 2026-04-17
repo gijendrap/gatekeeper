@@ -49,11 +49,17 @@ def check_bloat(project_root: Path, outgoing_files: List[str], command: str) -> 
                 console.print("[bold red]Fatal Error: Could not amend commit to remove bloat. Un-commit them manually.[/bold red]")
                 return -1
                 
-            with open(project_root / ".gitignore", "a", encoding="utf-8") as f:
-                # Add spacing to avoid collision with EOF
+            existing_lines = []
+            gitignore_path = project_root / ".gitignore"
+            if gitignore_path.exists():
+                with open(gitignore_path, "r", encoding="utf-8") as r:
+                    existing_lines = [line.strip() for line in r.readlines()]
+            
+            with open(gitignore_path, "a", encoding="utf-8") as f:
                 f.write("\n")
                 for bloat in bloat_detected:
-                    f.write(f"{bloat}/\n")
+                    if f"{bloat}/" not in existing_lines and bloat not in existing_lines:
+                        f.write(f"{bloat}/\n")
             console.print("[bold green]✅ Bloat successfully ripped out and .gitignore updated![/bold green]")
             return 1
         else:
@@ -162,9 +168,6 @@ def evaluate_payload(project_root: Path, outgoing_files: List[str], command: str
     if not outgoing_files:
         console.print("[yellow]No outgoing files to check.[/yellow]")
         return True
-        
-    if not check_bloat(project_root, outgoing_files, command):
-        return False
         
     blocked_files = check_ip_whitelist(project_root, outgoing_files)
     
