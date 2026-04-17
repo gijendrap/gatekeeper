@@ -3,7 +3,7 @@
 **A Zero-Trust Pre-Publish Firewall for Developers.**  
 GateKeeper intercepts your `git push` and `npm publish` commands to prevent catastrophic IP or API Secret leaks *before* your code ever leaves your hard drive.
 
-Built to prevent incidents like the [Anthropic Claude Code Leak](https://www.theverge.com/2024), GateKeeper operates on a **True Zero-Trust Architecture**. Instead of relying on brittle `.gitignore` blocklists, GateKeeper treats *every single file* as strictly private. You must explicitly whitelist files to allow them to leave your local machine.
+Built to prevent devastating IP and secret leaks, GateKeeper operates on a **True Zero-Trust Architecture**. Instead of relying on brittle `.gitignore` blocklists, GateKeeper treats *every single file* as strictly private. You must explicitly whitelist files to allow them to leave your local machine.
 
 ---
 
@@ -55,6 +55,6 @@ The moment you hit `Enter`, GateKeeper will intercept the push:
 
 ## 🔒 Advanced Secret Engine
 GateKeeper does not blindly decode giant `.mp4` or `.pdf` files. It utilizes native `b"\0"` null-byte sniffing to achieve massive concurrency over text files while avoiding Python Out-Of-Memory exceptions on 1GB+ JSON files. It natively halts memory-intense regex parsing in `0.02ms`.
-  hi
+  
 
 
