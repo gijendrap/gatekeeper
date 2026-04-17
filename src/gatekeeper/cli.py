@@ -73,9 +73,30 @@ def check(command: str = typer.Argument(..., help="The command to check (e.g. np
     from pathlib import Path
     from gatekeeper.evaluator import evaluate_payload
     from gatekeeper.shims import get_npm_publish_files, get_git_push_files
+    from gatekeeper.config import GATEKEEPER_CONFIG_FILE
     
     console.print(f"[bold cyan]GateKeeper intercepting:[/bold cyan] {command}")
     project_root = Path(os.getcwd())
+    
+    config_path = project_root / GATEKEEPER_CONFIG_FILE
+    if not config_path.exists():
+        console.print("\n[bold red]🚨 No GateKeeper Security Firewall detected in this repository![/bold red]")
+        console.print("Do you want to:")
+        console.print("  [1] [bold green]Initialize GateKeeper now[/bold green]")
+        console.print("  [2] [bold yellow]Push Unprotected (Bypass Firewall)[/bold yellow]")
+        console.print("  [3] [bold red]Abort Push[/bold red]")
+        
+        choice = typer.prompt("Choose an option (1/2/3)", type=int)
+        if choice == 1:
+            init()
+            console.print("\n[bold cyan]GateKeeper intercepting:[/bold cyan] Resuming evaluation with new rules...")
+        elif choice == 2:
+            console.print("\n[bold yellow]⚠️ Proceeding with UNPROTECTED push...[/bold yellow]")
+            console.print(f"\n[bold green]✅ {command.upper()} IS SAFE TO PROCEED (Handing back to actual process).[/bold green]")
+            return
+        else:
+            console.print(f"\n[bold red]❌ {command.upper()} ABORTED BY GATEKEEPER.[/bold red]")
+            raise typer.Exit(code=1)
     
     outgoing_files = []
     if command == "npm-publish":
