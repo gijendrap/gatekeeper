@@ -26,7 +26,7 @@ class DirectoryTree(Tree):
             self.whitelisted_paths.discard(".")
             self.whitelisted_paths.discard("")
             
-            ignore_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__"}
+            ignore_dirs = {".git", "node_modules", ".venv", "venv"}
             try:
                 for entry in self.project_root.iterdir():
                     if entry.name not in ignore_dirs:
@@ -70,7 +70,25 @@ class DirectoryTree(Tree):
         if getattr(node, "is_root", False) or not path:
             return label
             
-        status = "  [🟢 PUBLIC]" if self.is_path_public(rel_path) else "  [🔴 PRIVATE]"
+        rel_path_norm = rel_path.replace("\\", "/")
+        
+        if self.is_path_public(rel_path):
+            # It's public. Let's see if any children are explicitly blacklisted.
+            has_private_child = False
+            for d in self.blacklisted_paths:
+                if d.replace("\\", "/").startswith(f"{rel_path_norm}/"):
+                    has_private_child = True
+                    break
+            status = "  [🟡 MIXED]" if has_private_child else "  [🟢 PUBLIC]"
+        else:
+            # It's private. Let's see if any children are explicitly whitelisted.
+            has_public_child = False
+            for w in self.whitelisted_paths:
+                if w.replace("\\", "/").startswith(f"{rel_path_norm}/"):
+                    has_public_child = True
+                    break
+            status = "  [🟡 MIXED]" if has_public_child else "  [🔴 PRIVATE]"
+            
         label.append(status)
         return label
 
@@ -120,7 +138,7 @@ class GateKeeperTUI(App):
 
     def populate_tree(self, node: TreeNode, path: Path) -> None:
         """Recursively populate the file tree, ignoring common large dirs."""
-        ignore_dirs = {".git", "node_modules", ".venv", "venv", "__pycache__"}
+        ignore_dirs = {".git", "node_modules", ".venv", "venv"}
         
         try:
             entries = sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
@@ -175,6 +193,12 @@ class GateKeeperTUI(App):
                 refresh_descendants(child)
                 
         refresh_descendants(node)
+        
+        # Visually ripple the update upwards to trigger any new [🟡 MIXED] states
+        curr = node.parent
+        while curr is not None:
+            curr.refresh()
+            curr = curr.parent
 
     def action_save_and_exit(self) -> None:
         """Save the current whitelist and exit."""
