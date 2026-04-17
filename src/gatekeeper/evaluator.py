@@ -8,41 +8,11 @@ import subprocess
 
 console = Console()
 
-# Enterprise-grade set of high-risk secret regexes (verified against Gitleaks standards)
-DEFAULT_SECRETS = {
-    # --- AI & Cloud ---
-    "OpenAI API Key": r"(sk-[a-zA-Z0-9\-_]{48,}|sk-proj-[a-zA-Z0-9\-_]{48,})",
-    "Anthropic API Key": r"sk-ant-api[a-zA-Z0-9\-_]{90,}",
-    "AWS Access Key ID": r"(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}",
-    "Google Cloud API Key": r"AIza[0-9A-Za-z\-_]{35}",
-    
-    # --- Cloud Storage URLs (Anthropic Scenario) ---
-    "AWS S3 Bucket": r"[a-zA-Z0-9_\-\.]+\.s3\.amazonaws\.com",
-    "Cloudflare R2 Bucket": r"[a-zA-Z0-9_\-\.]+\.r2\.cloudflarestorage\.com",
-    "Google Cloud Storage": r"storage\.googleapis\.com/[a-zA-Z0-9_\-\.]+",
-    
-    # --- Version Control ---
-    "GitHub Token": r"gh[pousr]_[a-zA-Z0-9]{36}",
-    "GitLab Personal Access Token": r"glpat-[a-zA-Z0-9\-]{20}",
-    
-    # --- Messaging & Communication ---
-    "Slack Token": r"xox[bpa]-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24}",
-    "Slack Webhook": r"https://hooks\.slack\.com/services/T[a-zA-Z0-9_]{8,10}/B[a-zA-Z0-9_]{8,12}/[a-zA-Z0-9_]{24}",
-    "Discord Bot Token": r"[MN][A-Za-z\d]{23}\.[\w-]{6}\.[\w-]{27,38}",
-    
-    # --- Developer Tools ---
-    "Ngrok Auth Token": r"(?:^|[^a-zA-Z0-9_\-])[0-9a-zA-Z]{43,55}(?:$|[^a-zA-Z0-9_\-])",
-    "Heroku API Key": r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-    
-    # --- Payment & Email ---
-    "Stripe Secret Key": r"(sk_live|rk_live)_[0-9a-zA-Z]{24,99}",
-    "Twilio API Key": r"SK[0-9a-fA-F]{32}",
-    "SendGrid API Key": r"SG\.[0-9A-Za-z\-_]{22}\.[0-9A-Za-z\-_]{43}",
-    "Mailchimp API Key": r"[0-9a-f]{32}-us[0-9]{1,2}",
-    
-    # --- Cryptography ---
-    "Private Key Block": r"-----BEGIN (RSA|EC|DSA|OPENSSH|PGP|PRIVATE) KEY(?: BLOCK)?-----",
-}
+import json
+import subprocess
+import tempfile
+
+from gatekeeper.gitleaks_mgr import ensure_gitleaks
 
 ABSOLUTE_BANNED_EXTENSIONS = {".map", ".env", ".pem", ".key", ".log", ".p8"}
 
@@ -91,42 +61,54 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[st
 
 def scan_for_secrets(project_root: Path, outgoing_files: List[str]) -> bool:
     """
-    Stage 2: Scans whitelisted outgoing files for secrets.
+    Stage 2: Scans whitelisted outgoing files for secrets using Gitleaks.
     """
-    console.print("[cyan]Running Deep Secret Scan...[/cyan]")
+    console.print("[cyan]Running Deep Secret Scan with Gitleaks...[/cyan]")
+    
+    try:
+        gitleaks_bin = ensure_gitleaks()
+    except RuntimeError:
+        console.print("[bold red]Cannot proceed without Gitleaks.[/bold red]")
+        return False
+
     found_secrets = False
     
-    patterns = {name: re.compile(pat) for name, pat in DEFAULT_SECRETS.items()}
-    
-    for f in outgoing_files:
-        filepath = project_root / f
-        if filepath.exists() and filepath.is_file():
-            # OOM Risk check: Skip massive files (>5MB)
-            if filepath.stat().st_size > 5_000_000:
+    # Create a temporary directory to stream files into so Gitleaks can scan them rapidly without touching history
+    with tempfile.TemporaryDirectory() as temp_dir:
+        report_path = Path(temp_dir) / "gitleaks_report.json"
+        
+        # We will write the list of files to scan into a file if there are many, but gitleaks detect --no-git wants a directory pointing to the repo or specific files.
+        # However, gitleaks detect --no-git -s <file/dir> is standard. 
+        # For simplicity and precise control, we will just pipe the files or use a loop if files are few, or let gitleaks scan the repo but with a massive ignore?
+        # Actually, running gitleaks on individual files is fast enough for typical push payloads.
+        
+        for f in outgoing_files:
+            filepath = project_root / f
+            if not filepath.exists() or not filepath.is_file():
                 continue
                 
-            # CPU Spike check: Sniff for binary null bytes before attempting to decode everything into a massive text buffer
-            try:
-                with open(filepath, "rb") as bf:
-                    if b"\0" in bf.read(1024):
-                        continue
-            except Exception:
-                pass
-                
-            try:
-                content = filepath.read_text(encoding="utf-8")
-                for name, compiled_regex in patterns.items():
-                    if compiled_regex.search(content):
-                        console.print(f"[bold red]💥 SECRET LEAK DETECTED 💥[/bold red]")
-                        console.print(f"[red]Found '{name}' in {f}[/red]")
-                        found_secrets = True
-            except UnicodeDecodeError:
-                pass # skip edge-case binary files that didn't have null bytes
-                
-    if found_secrets:
-        return False
-        
-    return True
+            if filepath.stat().st_size > 5_000_000:
+                continue # OOM avoidance for huge binaries
+
+            res = subprocess.run(
+                [str(gitleaks_bin), "detect", "--no-git", "--source", str(filepath), "--report-path", str(report_path), "--exit-code", "1"],
+                capture_output=True,
+                text=True
+            )
+            
+            if res.returncode == 1 and report_path.exists():
+                found_secrets = True
+                try:
+                    with open(report_path, "r", encoding="utf-8") as rf:
+                        leaks = json.load(rf)
+                        for leak in leaks:
+                            console.print(f"[bold red]💥 SECRET LEAK DETECTED 💥[/bold red]")
+                            console.print(f"[red]Found '{leak.get('Description', 'Secret')}' in {f}[/red]")
+                            # console.print(f"[dim]Match: {leak.get('Match')}[/dim]") # Optional: hide the actual secret to avoid console logging
+                except Exception:
+                    console.print(f"[bold red]💥 SECRET LEAK DETECTED in {f}![/bold red]")
+                    
+    return not found_secrets
     
 def evaluate_payload(project_root: Path, outgoing_files: List[str], command: str = "git-push") -> bool:
     """

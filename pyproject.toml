@@ -7,18 +7,47 @@ name = "gatekeeper-cli"
 version = "0.1.0"
 description = "Zero-Trust Pre-Publish Firewall"
 authors = [
-    { name = "GateKeeper Authors", email = "author@example.com" }
+    { name = "Gijendra", email = "gijendra.gj@gmail.com" }
 ]
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+    "Topic :: Software Development :: Version Control :: Git"
+]
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
     "textual>=0.40.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.10.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/gijendrap/gatekeeper"
+Repository = "https://github.com/gijendrap/gatekeeper"
+Issues = "https://github.com/gijendrap/gatekeeper/issues"
+
 [project.scripts]
 gatekeeper = "gatekeeper.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gatekeeper"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+ignore_missing_imports = true

@@ -9,6 +9,11 @@ from gatekeeper.config import load_whitelist, save_whitelist
 
 class DirectoryTree(Tree):
     """A tree widget that displays a directory structure."""
+    
+    BINDINGS = [
+        ("enter", "toggle_node", "Expand/Collapse"),
+        ("space", "app.toggle_whitelist", "Toggle Permissions"),
+    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -129,10 +134,8 @@ class GateKeeperTUI(App):
     """
 
     BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("enter", "toggle_node", "Expand/Collapse Folder"),
-        ("space", "toggle_whitelist", "Toggle Public/Private"),
-        ("s", "save_and_exit", "Save & Exit")
+        ("s", "save_and_exit", "Save & Exit"),
+        ("q", "quit", "Quit")
     ]
 
     def __init__(self):

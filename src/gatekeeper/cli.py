@@ -45,6 +45,8 @@ def init():
         return
     elif choice == 3:
         console.print("\n[dim]Proceeding to Selective Publishing...[/dim]")
+        console.print("[bold yellow]💡 TIP:[/bold yellow] Maximize your terminal vertically to see the full interactive file tree clearly!")
+        console.input("\nPress [bold cyan]\\[ENTER][/bold cyan] to launch the Interactive UI...")
     else:
         console.print("[bold red]Invalid option. Aborting.[/bold red]")
         raise typer.Exit(code=1)

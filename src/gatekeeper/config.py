@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import List, Set, Tuple
+from typing import List, Set, Tuple, Optional
 
 GATEKEEPER_CONFIG_FILE = ".gatekeeper.json"
 
@@ -22,7 +22,7 @@ def load_whitelist(project_root: Path) -> Tuple[Set[str], Set[str]]:
     except (json.JSONDecodeError, IOError):
         return set(), set()
 
-def save_whitelist(project_root: Path, whitelist: Set[str], blacklist: Set[str] = None) -> None:
+def save_whitelist(project_root: Path, whitelist: Set[str], blacklist: Optional[Set[str]] = None) -> None:
     """
     Save the dual lists to .gatekeeper.json.
     """
