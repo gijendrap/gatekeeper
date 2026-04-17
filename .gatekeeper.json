@@ -1,6 +1,17 @@
 {
   "public_whitelist": [
-    "."
+    ".github",
+    "src",
+    "pyproject.toml",
+    "tests",
+    ".pytest_cache",
+    "dist",
+    "LICENSE",
+    ".mypy_cache",
+    ".gatekeeper.json",
+    ".gitignore"
   ],
-  "private_blacklist": []
+  "private_blacklist": [
+    "README.md"
+  ]
 }
