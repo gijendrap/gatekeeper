@@ -61,9 +61,6 @@ def install():
     """
     Installs the GateKeeper shims into your shell environment to automatically intercept publish commands.
     """
-    """
-    Installs the GateKeeper shims into your shell environment to automatically intercept publish commands.
-    """
     from gatekeeper.installer import install_shims
     install_shims()
 
