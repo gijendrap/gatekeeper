@@ -17,7 +17,9 @@ class DirectoryTree(Tree):
 
     def on_mount(self) -> None:
         """Load initial whitelist when mounted."""
-        self.whitelisted_paths, self.blacklisted_paths = load_whitelist(self.project_root)
+        w_paths, b_paths = load_whitelist(self.project_root)
+        self.whitelisted_paths = {p.replace("\\", "/") for p in w_paths}
+        self.blacklisted_paths = {p.replace("\\", "/") for p in b_paths}
         
         # If the user previously selected Option 1 (All Public), it saved a "." wildcard.
         # We must discard it so the interactive engine works, but we also must visually 
@@ -42,23 +44,24 @@ class DirectoryTree(Tree):
             event.stop()
 
     def is_path_public(self, p: str) -> bool:
-        """Evaluates explicitly resolving the dual Allow/Deny List rules."""
-        is_safe = False
+        """Evaluates explicitly resolving the dual Allow/Deny List rules using Path Specificity."""
         p_norm = p.replace("\\", "/")
         
+        allow_len = -1
         for allowed in self.whitelisted_paths:
             allowed_norm = allowed.replace("\\", "/")
-            if p_norm == allowed_norm or p_norm.startswith(f"{allowed_norm}/"):
-                is_safe = True
-                break
+            if allowed_norm == "." or allowed_norm == "":
+                allow_len = max(allow_len, 0)
+            elif p_norm == allowed_norm or p_norm.startswith(f"{allowed_norm}/"):
+                allow_len = max(allow_len, len(allowed_norm))
                 
+        deny_len = -1
         for denied in self.blacklisted_paths:
             denied_norm = denied.replace("\\", "/")
             if p_norm == denied_norm or p_norm.startswith(f"{denied_norm}/"):
-                is_safe = False
-                break
+                deny_len = max(deny_len, len(denied_norm))
                 
-        return is_safe
+        return allow_len > deny_len
 
     def render_label(self, node: TreeNode, base_style, style):
         """Format the node text with its status."""
@@ -170,7 +173,8 @@ class GateKeeperTUI(App):
         if currently_public:
             # Transition to Private (Inject into Deny List)
             tree.whitelisted_paths.discard(rel_path)
-            tree.blacklisted_paths.add(rel_path)
+            tree.whitelisted_paths.discard(rel_path_norm)
+            tree.blacklisted_paths.add(rel_path_norm)
             
             # Recursively flush old descendant allow-rules to cleanly inherit the new block
             for x in list(tree.whitelisted_paths):
@@ -179,7 +183,8 @@ class GateKeeperTUI(App):
         else:
             # Transition to Public (Inject into Allow List)
             tree.blacklisted_paths.discard(rel_path)
-            tree.whitelisted_paths.add(rel_path)
+            tree.blacklisted_paths.discard(rel_path_norm)
+            tree.whitelisted_paths.add(rel_path_norm)
             
             # Recursively flush old descendant block-rules to cleanly inherit the new allowance
             for x in list(tree.blacklisted_paths):

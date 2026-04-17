@@ -65,22 +65,24 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[st
             console.print(f"[bold red]🚫 CRITICAL BAN:[/bold red] {norm_f} contains a forbidden file extension!")
             continue
             
+        allow_len = -1
         for allowed in whitelist:
             norm_a = Path(allowed).as_posix()
-            # If the whitelist allows the root directory (.), everything inside is safe.
             if norm_a == "." or norm_a == "":
-                is_safe = True
-                break
-            if norm_f == norm_a or norm_f.startswith(f"{norm_a}/"):
-                is_safe = True
-                break
+                allow_len = max(allow_len, 0)
+            elif norm_f == norm_a or norm_f.startswith(f"{norm_a}/"):
+                allow_len = max(allow_len, len(norm_a))
                 
-        # The Custom Deny List explicitly overrides any matched allows
+        deny_len = -1
         for denied in blacklist:
             norm_b = Path(denied).as_posix()
             if norm_f == norm_b or norm_f.startswith(f"{norm_b}/"):
-                is_safe = False
-                break
+                deny_len = max(deny_len, len(norm_b))
+                
+        if allow_len > deny_len:
+            is_safe = True
+        else:
+            is_safe = False
                 
         if not is_safe:
             blocked_files.append(norm_f)
