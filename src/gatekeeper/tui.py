@@ -141,7 +141,12 @@ class GateKeeperTUI(App):
                 break
                 
         if is_parent_public:
-            self.bell()
+            self.notify(
+                "You cannot mark a specific file as Private if its Parent Folder is marked Public! Uncheck the parent folder first.", 
+                title="Hierarchical Lock", 
+                severity="warning", 
+                timeout=5.0
+            )
             return
         
         # Determine if we are making it public or private based on the current state

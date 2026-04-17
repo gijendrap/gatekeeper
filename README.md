@@ -55,3 +55,6 @@ The moment you hit `Enter`, GateKeeper will intercept the push:
 
 ## 🔒 Advanced Secret Engine
 GateKeeper does not blindly decode giant `.mp4` or `.pdf` files. It utilizes native `b"\0"` null-byte sniffing to achieve massive concurrency over text files while avoiding Python Out-Of-Memory exceptions on 1GB+ JSON files. It natively halts memory-intense regex parsing in `0.02ms`.
+
+
+
