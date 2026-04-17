@@ -1,17 +1,10 @@
 {
   "public_whitelist": [
-    "README.md",
-    "pyproject.toml"
+    ".gatekeeper.json",
+    "src"
   ],
   "private_blacklist": [
-    "src",
-    "src\\gatekeeper\\tui.py",
-    "src\\gatekeeper\\evaluator.py",
-    "src\\gatekeeper\\context.py",
-    "src\\gatekeeper\\config.py",
-    ".gatekeeper.json",
-    "src\\gatekeeper\\cli.py",
-    "src\\gatekeeper\\shims.py",
-    "src\\gatekeeper\\installer.py"
+    "pyproject.toml",
+    "README.md"
   ]
 }
