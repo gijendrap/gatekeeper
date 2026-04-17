@@ -9,8 +9,8 @@ Built to prevent devastating IP and secret leaks, GateKeeper operates on a **Tru
 
 ## 🚀 Quick Start Guide
 
-### 1. Global Installation
-Install GateKeeper globally on your machine using Python'sss package manager:
+### 1.Installation
+Install GateKeeper on your machine using Python's package manager:
 ```bash
 pip install gatekeeper-cli
 ```
