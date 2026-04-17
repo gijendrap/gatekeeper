@@ -12,11 +12,12 @@ class DirectoryTree(Tree):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.whitelisted_paths = set()
+        self.blacklisted_paths = set()
         self.project_root = Path(os.getcwd())
 
     def on_mount(self) -> None:
         """Load initial whitelist when mounted."""
-        self.whitelisted_paths = load_whitelist(self.project_root)
+        self.whitelisted_paths, self.blacklisted_paths = load_whitelist(self.project_root)
         
         # If the user previously selected Option 1 (All Public), it saved a "." wildcard.
         # We must discard it so the interactive engine works, but we also must visually 
@@ -40,6 +41,25 @@ class DirectoryTree(Tree):
             event.prevent_default()
             event.stop()
 
+    def is_path_public(self, p: str) -> bool:
+        """Evaluates explicitly resolving the dual Allow/Deny List rules."""
+        is_safe = False
+        p_norm = p.replace("\\", "/")
+        
+        for allowed in self.whitelisted_paths:
+            allowed_norm = allowed.replace("\\", "/")
+            if p_norm == allowed_norm or p_norm.startswith(f"{allowed_norm}/"):
+                is_safe = True
+                break
+                
+        for denied in self.blacklisted_paths:
+            denied_norm = denied.replace("\\", "/")
+            if p_norm == denied_norm or p_norm.startswith(f"{denied_norm}/"):
+                is_safe = False
+                break
+                
+        return is_safe
+
     def render_label(self, node: TreeNode, base_style, style):
         """Format the node text with its status."""
         label = super().render_label(node, base_style, style).copy()
@@ -50,14 +70,7 @@ class DirectoryTree(Tree):
         if getattr(node, "is_root", False) or not path:
             return label
             
-        def is_path_public(p: str) -> bool:
-            if p in self.whitelisted_paths: return True
-            for parent in Path(p).parents:
-                if str(parent).replace("\\", "/") in [x.replace("\\", "/") for x in self.whitelisted_paths]:
-                    return True
-            return False
-            
-        status = "  [🟢 PUBLIC]" if is_path_public(rel_path) else "  [🔴 PRIVATE]"
+        status = "  [🟢 PUBLIC]" if self.is_path_public(rel_path) else "  [🔴 PRIVATE]"
         label.append(status)
         return label
 
@@ -132,51 +145,41 @@ class GateKeeperTUI(App):
             
         path = node.data
         rel_path = os.path.relpath(path, self.project_root)
+        rel_path_norm = rel_path.replace("\\", "/")
         
-        # Prevent UI desync: A child cannot be toggled to Private if the parent folder is explicitly Public!
-        is_parent_public = False
-        for parent in Path(rel_path).parents:
-            if str(parent).replace("\\", "/") in [x.replace("\\", "/") for x in tree.whitelisted_paths]:
-                is_parent_public = True
-                break
-                
-        if is_parent_public:
-            self.notify(
-                "You cannot mark a specific file as Private if its Parent Folder is marked Public! Uncheck the parent folder first.", 
-                title="Hierarchical Lock", 
-                severity="warning", 
-                timeout=5.0
-            )
-            return
+        currently_public = tree.is_path_public(rel_path)
         
-        # Determine if we are making it public or private based on the current state
-        is_now_public = rel_path not in tree.whitelisted_paths
-        
-        # Recursive function to update the targeted node and all nested children
-        def update_node_and_descendants(target_node: TreeNode, make_public: bool):
-            p = target_node.data
-            if not p:
-                return
-                
-            r_path = os.path.relpath(p, self.project_root)
-            if make_public:
-                tree.whitelisted_paths.add(r_path)
-            else:
-                tree.whitelisted_paths.discard(r_path)
-                
-            target_node.refresh()
+        if currently_public:
+            # Transition to Private (Inject into Deny List)
+            tree.whitelisted_paths.discard(rel_path)
+            tree.blacklisted_paths.add(rel_path)
             
-            # Recurse through children
+            # Recursively flush old descendant allow-rules to cleanly inherit the new block
+            for x in list(tree.whitelisted_paths):
+                if x.replace("\\", "/").startswith(f"{rel_path_norm}/"):
+                    tree.whitelisted_paths.discard(x)
+        else:
+            # Transition to Public (Inject into Allow List)
+            tree.blacklisted_paths.discard(rel_path)
+            tree.whitelisted_paths.add(rel_path)
+            
+            # Recursively flush old descendant block-rules to cleanly inherit the new allowance
+            for x in list(tree.blacklisted_paths):
+                if x.replace("\\", "/").startswith(f"{rel_path_norm}/"):
+                    tree.blacklisted_paths.discard(x)
+                    
+        # Visually refresh the exact node and all nested descendants
+        def refresh_descendants(target_node: TreeNode):
+            target_node.refresh()
             for child in target_node.children:
-                update_node_and_descendants(child, make_public)
+                refresh_descendants(child)
                 
-        # Apply the toggle to this node and everything inside it
-        update_node_and_descendants(node, is_now_public)
+        refresh_descendants(node)
 
     def action_save_and_exit(self) -> None:
         """Save the current whitelist and exit."""
         tree = self.query_one(DirectoryTree)
-        save_whitelist(self.project_root, tree.whitelisted_paths)
+        save_whitelist(self.project_root, tree.whitelisted_paths, tree.blacklisted_paths)
         self.exit(message="Whitelist saved successfully.")
 
 if __name__ == "__main__":

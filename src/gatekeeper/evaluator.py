@@ -51,7 +51,7 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[st
     Stage 1: Validates that all outgoing_files are explicitly whitelisted.
     Returns a list of blocked files.
     """
-    whitelist = load_whitelist(project_root)
+    whitelist, blacklist = load_whitelist(project_root)
     blocked_files = []
     
     for f in outgoing_files:
@@ -74,6 +74,14 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[st
             if norm_f == norm_a or norm_f.startswith(f"{norm_a}/"):
                 is_safe = True
                 break
+                
+        # The Custom Deny List explicitly overrides any matched allows
+        for denied in blacklist:
+            norm_b = Path(denied).as_posix()
+            if norm_f == norm_b or norm_f.startswith(f"{norm_b}/"):
+                is_safe = False
+                break
+                
         if not is_safe:
             blocked_files.append(norm_f)
             
