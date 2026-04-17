@@ -4,6 +4,7 @@ from textual.app import App, ComposeResult
 from textual.events import Key
 from textual.widgets import Header, Footer, Tree, Static
 from textual.widgets._tree import TreeNode
+from rich.text import Text
 from gatekeeper.config import load_whitelist, save_whitelist
 
 class DirectoryTree(Tree):
@@ -82,7 +83,8 @@ class DirectoryTree(Tree):
                 if d.replace("\\", "/").startswith(f"{rel_path_norm}/"):
                     has_private_child = True
                     break
-            status = "  [🟡 MIXED]" if has_private_child else "  [🟢 PUBLIC]"
+            status_text = "[bold yellow]◐ MIXED[/bold yellow]" if has_private_child else "[bold green]● PUBLIC[/bold green]"
+            status = Text.from_markup(f"  {status_text}")
         else:
             # It's private. Let's see if any children are explicitly whitelisted.
             has_public_child = False
@@ -90,7 +92,8 @@ class DirectoryTree(Tree):
                 if w.replace("\\", "/").startswith(f"{rel_path_norm}/"):
                     has_public_child = True
                     break
-            status = "  [🟡 MIXED]" if has_public_child else "  [🔴 PRIVATE]"
+            status_text = "[bold yellow]◐ MIXED[/bold yellow]" if has_public_child else "[bold red]○ PRIVATE[/bold red]"
+            status = Text.from_markup(f"  {status_text}")
             
         label.append(status)
         return label
@@ -100,18 +103,27 @@ class GateKeeperTUI(App):
     
     CSS = """
     Screen {
-        background: $surface;
+        background: #0D1117;
     }
     #tree-view {
         height: 1fr;
-        border: solid green;
+        border: round #30363d;
+        margin: 0 1;
+        background: #161B22;
+        color: #c9d1d9;
+        padding: 0 1;
+    }
+    #tree-view:focus {
+        border: round #58a6ff;
     }
     #help-text {
-        height: 3;
+        height: auto;
+        padding: 0;
+        margin: 0;
         dock: top;
         content-align: center middle;
-        background: $primary-darken-2;
-        color: $text;
+        background: #1f6feb;
+        color: #ffffff;
         text-style: bold;
     }
     """
@@ -130,11 +142,14 @@ class GateKeeperTUI(App):
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(show_clock=False)
-        yield Static("Enter: Expand/Collapse | Space: Toggle Status | S: Save | Q: Quit\nAll files default to 🔴 PRIVATE. Explicitly mark allowed folders as 🟢 PUBLIC.", id="help-text")
+        help_msg = (
+            "🛡️ [b]GATEKEEPER ZERO-TRUST[/b] 🛡️ | [b]↑/↓[/b] Navigate • [b]Space[/b] Toggle • [b]Enter[/b] Expand • [b]S[/b] Save • [b]Q[/b] Quit"
+        )
+        yield Static(help_msg, id="help-text", markup=True)
         
-        tree: DirectoryTree[Path] = DirectoryTree("Project Filesystem")
+        tree: DirectoryTree[Path] = DirectoryTree("📁 Project Vault")
         tree.id = "tree-view"
-        tree.root.expand() # Only expand the root folder itself so you see the top level domains
+        tree.root.expand() 
         self.populate_tree(tree.root, self.project_root)
         yield tree
         yield Footer()
@@ -149,11 +164,12 @@ class GateKeeperTUI(App):
                 if entry.name in ignore_dirs:
                     continue
                 if entry.is_dir():
-                    # explicitly declare expand=False so it shrinks/collapses folder by default
-                    child = node.add(entry.name, data=entry, expand=False)
+                    # Default to expanded so the user immediately sees the whole landscape
+                    child = node.add(f"📂 {entry.name}", data=entry, expand=True)
                     self.populate_tree(child, entry)
                 else:
-                    node.add_leaf(entry.name, data=entry)
+                    icon = "🐍 " if entry.name.endswith('.py') else ("📝 " if entry.name.endswith('.md') else "📄 ")
+                    node.add_leaf(f"{icon}{entry.name}", data=entry)
         except PermissionError:
             pass
 

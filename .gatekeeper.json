@@ -1,6 +1,6 @@
 {
   "public_whitelist": [
-    "."
+    "src"
   ],
   "private_blacklist": []
 }
