@@ -15,6 +15,51 @@ import tempfile
 from gatekeeper.gitleaks_mgr import ensure_gitleaks
 
 ABSOLUTE_BANNED_EXTENSIONS = {".map", ".env", ".pem", ".key", ".log", ".p8"}
+BLOAT_DIRECTORIES = {"venv", ".venv", "node_modules", "__pycache__", "dist", ".env"}
+
+def check_bloat(project_root: Path, outgoing_files: List[str], command: str) -> int:
+    """
+    Checks if massive bloat directories are accidentally included.
+    Returns:
+      0: Clean (no bloat)
+      1: Bloat detected and forcefully removed
+     -1: Aborted by user or error
+    """
+    bloat_detected = set()
+    for f in outgoing_files:
+        parts = Path(f).parts
+        for part in parts:
+            if part in BLOAT_DIRECTORIES:
+                bloat_detected.add(part)
+                
+    if not bloat_detected:
+        return 0
+        
+    console.print("\n[bold red]🚨 MASSIVE BLOAT CHECK-IN DETECTED 🚨[/bold red]")
+    console.print(f"[red]You are about to upload massive dependency folders:[/red] [bold yellow]{', '.join(bloat_detected)}[/bold yellow]")
+    
+    if command == "git-push":
+        if typer.confirm("Would you like GateKeeper to forcefully un-commit these and add them to .gitignore?"):
+            console.print("[cyan]Applying Git Amendments...[/cyan]")
+            for bloat in bloat_detected:
+                subprocess.run(["git", "rm", "--cached", "-r", "--ignore-unmatch", bloat], cwd=project_root, capture_output=True)
+                
+            res = subprocess.run(["git", "commit", "--amend", "--no-edit"], cwd=project_root, capture_output=True)
+            if res.returncode != 0:
+                console.print("[bold red]Fatal Error: Could not amend commit to remove bloat. Un-commit them manually.[/bold red]")
+                return -1
+                
+            with open(project_root / ".gitignore", "a", encoding="utf-8") as f:
+                # Add spacing to avoid collision with EOF
+                f.write("\n")
+                for bloat in bloat_detected:
+                    f.write(f"{bloat}/\n")
+            console.print("[bold green]✅ Bloat successfully ripped out and .gitignore updated![/bold green]")
+            return 1
+        else:
+            return -1
+            
+    return -1
 
 def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[str]:
     """
@@ -117,6 +162,9 @@ def evaluate_payload(project_root: Path, outgoing_files: List[str], command: str
     if not outgoing_files:
         console.print("[yellow]No outgoing files to check.[/yellow]")
         return True
+        
+    if not check_bloat(project_root, outgoing_files, command):
+        return False
         
     blocked_files = check_ip_whitelist(project_root, outgoing_files)
     

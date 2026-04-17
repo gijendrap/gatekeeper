@@ -1,0 +1,11 @@
+
+# GateKeeper Auto-Seeded Ignores
+venv/
+.venv/
+node_modules/
+__pycache__/
+.env
+*.pyc
+dist/
+build/
+.DS_Store

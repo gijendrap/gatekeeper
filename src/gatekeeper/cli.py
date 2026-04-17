@@ -17,6 +17,14 @@ def init():
     
     console.print("[bold green]Analyzing context...[/bold green]")
     project_root = Path(os.getcwd())
+    
+    gitignore_path = project_root / ".gitignore"
+    if not gitignore_path.exists():
+        console.print("[yellow]No .gitignore found! GateKeeper is auto-seeding standard dependency ignores...[/yellow]")
+        with open(gitignore_path, "w", encoding="utf-8") as f:
+            f.write("# GateKeeper Auto-Seeded Ignores\nvenv/\n.venv/\nnode_modules/\n__pycache__/\n.env\n*.pyc\ndist/\nbuild/\n.DS_Store\n")
+        console.print("[bold green]✅ Protected repository from environment bloat![/bold green]")
+        
     context_data = analyze_context(project_root)
     
     if context_data["is_permanently_locked"]:
@@ -73,12 +81,35 @@ def check(command: str = typer.Argument(..., help="The command to check (e.g. np
     """
     import os
     from pathlib import Path
-    from gatekeeper.evaluator import evaluate_payload
+    from gatekeeper.evaluator import evaluate_payload, check_bloat
     from gatekeeper.shims import get_npm_publish_files, get_git_push_files
     from gatekeeper.config import GATEKEEPER_CONFIG_FILE
     
     console.print(f"[bold cyan]GateKeeper intercepting:[/bold cyan] {command}")
     project_root = Path(os.getcwd())
+    
+    outgoing_files = []
+    if command == "npm-publish":
+        console.print("[dim]Extracting npm tarball payload via dry-run...[/dim]")
+        outgoing_files = get_npm_publish_files(project_root)
+    elif command == "git-push":
+        console.print("[dim]Analyzing git diff for outgoing commits...[/dim]")
+        outgoing_files = get_git_push_files(project_root)
+    else:
+        console.print(f"[yellow]Unknown interception command: {command}[/yellow]")
+        raise typer.Exit(code=1)
+        
+    # Global Bloat Check (Runs even if GateKeeper isn't initialized!)
+    bloat_res = check_bloat(project_root, outgoing_files, command)
+    if bloat_res == -1:
+        console.print(f"\n[bold red]❌ {command.upper()} ABORTED BY GATEKEEPER.[/bold red]")
+        raise typer.Exit(code=1)
+    elif bloat_res == 1:
+        # If bloat was stripped, we must RE-ANALYZE the commit because files changed!
+        if command == "npm-publish":
+            outgoing_files = get_npm_publish_files(project_root)
+        elif command == "git-push":
+            outgoing_files = get_git_push_files(project_root)
     
     config_path = project_root / GATEKEEPER_CONFIG_FILE
     if not config_path.exists():
@@ -99,17 +130,6 @@ def check(command: str = typer.Argument(..., help="The command to check (e.g. np
         else:
             console.print(f"\n[bold red]❌ {command.upper()} ABORTED BY GATEKEEPER.[/bold red]")
             raise typer.Exit(code=1)
-    
-    outgoing_files = []
-    if command == "npm-publish":
-        console.print("[dim]Extracting npm tarball payload via dry-run...[/dim]")
-        outgoing_files = get_npm_publish_files(project_root)
-    elif command == "git-push":
-        console.print("[dim]Analyzing git diff for outgoing commits...[/dim]")
-        outgoing_files = get_git_push_files(project_root)
-    else:
-        console.print(f"[yellow]Unknown interception command: {command}[/yellow]")
-        raise typer.Exit(code=1)
         
     if not evaluate_payload(project_root, outgoing_files, command):
         console.print(f"\n[bold red]❌ {command.upper()} ABORTED BY GATEKEEPER.[/bold red]")
