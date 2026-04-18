@@ -17,6 +17,25 @@ from gatekeeper.gitleaks_mgr import ensure_gitleaks
 ABSOLUTE_BANNED_EXTENSIONS = {".map", ".env", ".pem", ".key", ".log", ".p8"}
 BLOAT_DIRECTORIES = {"venv", ".venv", "node_modules", "__pycache__", "dist", ".env"}
 
+ABSOLUTE_BANNED_FILENAMES = {
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.development",
+    "secrets.json",
+    "secrets.yaml",
+    "secrets.yml",
+    "credentials.json",
+    "credentials.yaml",
+    "serviceaccountkey.json",
+    "firebase-adminsdk.json",
+    "id_rsa",
+    "id_ed25519",
+    "id_ecdsa",
+    ".htpasswd",
+    "wp-config.php",
+}
+
 def check_bloat(project_root: Path, outgoing_files: List[str], command: str) -> int:
     """
     Checks if massive bloat directories are accidentally included.
@@ -80,6 +99,12 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[st
         # Normalize file separators for comparison
         norm_f = Path(f).as_posix()
         
+        # Immediate Hard-Ban Check: Certain filenames are universally forbidden regardless of UI selection
+        if Path(f).name.lower() in ABSOLUTE_BANNED_FILENAMES:
+            blocked_files.append(norm_f)
+            console.print(f"[bold red]🚫 CRITICAL BAN:[/bold red] {norm_f} is a permanently banned secret filename!")
+            continue
+
         # Immediate Hard-Ban Check: Certain extensions are universally forbidden regardless of UI selection
         if Path(f).suffix.lower() in ABSOLUTE_BANNED_EXTENSIONS:
             blocked_files.append(norm_f)

@@ -1,4 +1,5 @@
 import os
+import hashlib
 import platform
 import urllib.request
 import zipfile
@@ -13,7 +14,11 @@ GATEKEEPER_DIR = Path.home() / ".gatekeeper"
 BIN_DIR = GATEKEEPER_DIR / "bin"
 GITLEAKS_BIN = BIN_DIR / ("gitleaks.exe" if platform.system().lower() == "windows" else "gitleaks")
 
-def get_download_url() -> str:
+def get_download_url() -> tuple:
+    """
+    Returns (url, filename) for the gitleaks archive appropriate for the
+    current platform.
+    """
     system = platform.system().lower()
     machine = platform.machine().lower()
 
@@ -34,9 +39,50 @@ def get_download_url() -> str:
         arch = "x64" # fallback
 
     ext = "zip" if os_name == "windows" else "tar.gz"
-    
-    url = f"https://github.com/gitleaks/gitleaks/releases/download/v{GITLEAKS_VERSION}/gitleaks_{GITLEAKS_VERSION}_{os_name}_{arch}.{ext}"
-    return url
+    filename = f"gitleaks_{GITLEAKS_VERSION}_{os_name}_{arch}.{ext}"
+    url = f"https://github.com/gitleaks/gitleaks/releases/download/v{GITLEAKS_VERSION}/{filename}"
+    return url, filename
+
+
+def verify_checksum(file_path: Path, version: str, filename: str) -> None:
+    """
+    Fetches the official checksums.txt from the Gitleaks GitHub release,
+    locates the entry for `filename`, and compares its SHA-256 against the
+    downloaded archive.  Raises RuntimeError on mismatch and deletes the
+    bad file so it is never extracted.
+    """
+    checksums_url = (
+        f"https://github.com/gitleaks/gitleaks/releases/download/"
+        f"v{version}/checksums.txt"
+    )
+    try:
+        with urllib.request.urlopen(checksums_url) as resp:
+            checksums_text = resp.read().decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError(f"Failed to fetch checksums.txt: {exc}") from exc
+
+    expected_hash: str | None = None
+    for line in checksums_text.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[1].strip() == filename:
+            expected_hash = parts[0].strip()
+            break
+
+    if expected_hash is None:
+        file_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Could not find checksum entry for '{filename}' in checksums.txt."
+        )
+
+    actual_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
+    if actual_hash != expected_hash:
+        file_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Checksum mismatch for {filename}!\n"
+            f"  expected: {expected_hash}\n"
+            f"  got:      {actual_hash}\n"
+            "The downloaded file has been deleted. This may indicate a MITM or tampered release."
+        )
 
 def ensure_gitleaks() -> Path:
     """
@@ -48,12 +94,18 @@ def ensure_gitleaks() -> Path:
 
     BIN_DIR.mkdir(parents=True, exist_ok=True)
     
-    url = get_download_url()
-    archive_path = BIN_DIR / f"gitleaks_archive.{url.split('.')[-1]}"
+    url, filename = get_download_url()
+    ext = url.split(".")[-1]
+    archive_path = BIN_DIR / f"gitleaks_archive.{ext}"
     
     console.print(f"[cyan]Downloading Gitleaks v{GITLEAKS_VERSION} for your system...[/cyan]")
     try:
         urllib.request.urlretrieve(url, archive_path)
+
+        # Verify integrity before extracting — guards against MITM / tampered releases
+        console.print("[dim]Verifying checksum...[/dim]")
+        verify_checksum(archive_path, GITLEAKS_VERSION, filename)
+        console.print("[dim]✅ Checksum verified.[/dim]")
         
         if archive_path.suffix == ".zip":
             with zipfile.ZipFile(archive_path, 'r') as zip_ref:

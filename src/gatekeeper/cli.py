@@ -14,6 +14,7 @@ def init():
     from gatekeeper.context import analyze_context
     from gatekeeper.tui import GateKeeperTUI
     from gatekeeper.config import GATEKEEPER_CONFIG_FILE, save_whitelist
+    from gatekeeper.installer import install_git_hook
     
     console.print("[bold green]Analyzing context...[/bold green]")
     project_root = Path(os.getcwd())
@@ -45,10 +46,12 @@ def init():
     
     if choice == 1:
         save_whitelist(project_root, {"."}) # "." means the root directory, making everything public
+        install_git_hook(project_root)
         console.print("\n[bold green]✅ Project marked as Open-Source (All Public).[/bold green]")
         return
     elif choice == 2:
         save_whitelist(project_root, set()) # Empty set means nothing is public
+        install_git_hook(project_root)
         console.print("\n[bold green]✅ Project marked as Private App (All Private).[/bold green]")
         return
     elif choice == 3:
@@ -65,6 +68,7 @@ def init():
     result = ui.run()
     if result:
         console.print(f"[bold blue]{result}[/bold blue]")
+    install_git_hook(project_root)
 
 @app.command("install")
 def install():

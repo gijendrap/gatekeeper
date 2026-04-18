@@ -1,9 +1,46 @@
 import os
+import stat
 from pathlib import Path
 from rich.console import Console
 import typer
 
 console = Console()
+
+PRE_PUSH_HOOK = """#!/bin/sh
+# >>> GateKeeper Hook >>>
+gatekeeper check git-push
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+# <<< GateKeeper Hook <<<
+"""
+
+def install_git_hook(project_root: Path) -> None:
+    """
+    Writes a pre-push Git hook that calls `gatekeeper check git-push` so that
+    GUI clients (VS Code, GitHub Desktop, Tower, etc.) which bypass shell shims
+    are also protected.
+    """
+    hooks_dir = project_root / ".git" / "hooks"
+    if not hooks_dir.exists():
+        console.print("[yellow]⚠️  No .git/hooks directory found — skipping git hook install.[/yellow]")
+        return
+
+    hook_path = hooks_dir / "pre-push"
+
+    # Guard: don't overwrite if already installed
+    if hook_path.exists() and "GateKeeper Hook" in hook_path.read_text(encoding="utf-8"):
+        console.print("[bold yellow]⚠️  GateKeeper pre-push hook is already installed.[/bold yellow]")
+        return
+
+    hook_path.write_text(PRE_PUSH_HOOK, encoding="utf-8")
+
+    # Make executable on all platforms
+    current_mode = hook_path.stat().st_mode
+    hook_path.chmod(current_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+    console.print("[bold green]✅ GateKeeper pre-push git hook installed (.git/hooks/pre-push)[/bold green]")
+    console.print("[dim]  This protects GUI clients (VS Code, GitHub Desktop, Tower, etc.) too.[/dim]")
 
 BASH_ZSH_SHIM = """
 # >>> GateKeeper Shims >>>

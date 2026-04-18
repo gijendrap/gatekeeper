@@ -16,7 +16,6 @@ def get_npm_publish_files(project_root: Path) -> List[str]:
             cwd=project_root, 
             capture_output=True, 
             text=True,
-            shell=True 
         )
         if result.returncode != 0:
             return []
@@ -29,30 +28,54 @@ def get_npm_publish_files(project_root: Path) -> List[str]:
 
 def get_git_push_files(project_root: Path) -> List[str]:
     """
-    Fetch files changed between local HEAD and remote tracking branch.
-    Includes multiple fallbacks if the tracking branch hasn't been established yet.
+    Collect every file touched by any unpushed commit by enumerating
+    all unpushed SHAs via git log and diffing each one individually.
+    Falls back to git ls-files when no remote tracking branch exists.
+    Uses shell=False throughout to avoid shell-injection risk.
     """
-    strategies = [
-        ["git", "diff", "--name-only", "@{u}..HEAD"],
-        ["git", "diff", "--name-only", "origin/main...HEAD"],
-        ["git", "diff", "--name-only", "origin/master...HEAD"],
-        ["git", "ls-files"]
-    ]
-    
-    for cmd in strategies:
-        try:
-            result = subprocess.run(
-                cmd,
-                cwd=project_root,
-                capture_output=True,
-                text=True,
-                shell=True
-            )
-            out = result.stdout.strip()
-            if result.returncode == 0 and out:
-                return [line.strip() for line in out.splitlines() if line.strip()]
-        except Exception:
-            continue
-            
-    return []
+    files: set = set()
 
+    # Step 1: Try to collect all unpushed commit SHAs
+    try:
+        sha_result = subprocess.run(
+            ["git", "log", "--format=%H", "@{u}..HEAD"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+        )
+        if sha_result.returncode == 0 and sha_result.stdout.strip():
+            shas = [s.strip() for s in sha_result.stdout.splitlines() if s.strip()]
+            for sha in shas:
+                try:
+                    diff_result = subprocess.run(
+                        ["git", "diff-tree", "--no-commit-id", "-r", "--name-only", sha],
+                        cwd=project_root,
+                        capture_output=True,
+                        text=True,
+                    )
+                    if diff_result.returncode == 0 and diff_result.stdout.strip():
+                        for line in diff_result.stdout.splitlines():
+                            line = line.strip()
+                            if line:
+                                files.add(line)
+                except Exception:
+                    continue
+            if files:
+                return list(files)
+    except Exception:
+        pass
+
+    # Step 2: Fallback — no remote exists, list all tracked files
+    try:
+        ls_result = subprocess.run(
+            ["git", "ls-files"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+        )
+        if ls_result.returncode == 0 and ls_result.stdout.strip():
+            return [line.strip() for line in ls_result.stdout.splitlines() if line.strip()]
+    except Exception:
+        pass
+
+    return []
