@@ -8,7 +8,7 @@ console = Console()
 
 PRE_PUSH_HOOK = """#!/bin/sh
 # >>> GateKeeper Hook >>>
-gatekeeper check git-push
+gatekeeper check git-push --non-interactive
 if [ $? -ne 0 ]; then
     exit 1
 fi

@@ -36,7 +36,7 @@ ABSOLUTE_BANNED_FILENAMES = {
     "wp-config.php",
 }
 
-def check_bloat(project_root: Path, outgoing_files: List[str], command: str) -> int:
+def check_bloat(project_root: Path, outgoing_files: List[str], command: str, non_interactive: bool = False) -> int:
     """
     Checks if massive bloat directories are accidentally included.
     Returns:
@@ -58,6 +58,9 @@ def check_bloat(project_root: Path, outgoing_files: List[str], command: str) -> 
     console.print(f"[red]You are about to upload massive dependency folders:[/red] [bold yellow]{', '.join(bloat_detected)}[/bold yellow]")
     
     if command == "git-push":
+        if non_interactive:
+            console.print("[bold red]Non-interactive mode: aborting push due to bloat. Please un-commit these directories and add them to .gitignore.[/bold red]")
+            return -1
         if typer.confirm("Would you like GateKeeper to forcefully un-commit these and add them to .gitignore?"):
             console.print("[cyan]Applying Git Amendments...[/cyan]")
             for bloat in bloat_detected:
@@ -186,7 +189,7 @@ def scan_for_secrets(project_root: Path, outgoing_files: List[str]) -> bool:
                     
     return not found_secrets
     
-def evaluate_payload(project_root: Path, outgoing_files: List[str], command: str = "git-push") -> bool:
+def evaluate_payload(project_root: Path, outgoing_files: List[str], command: str = "git-push", non_interactive: bool = False) -> bool:
     """
     Runs the two-stage evaluation line.
     """
@@ -203,6 +206,9 @@ def evaluate_payload(project_root: Path, outgoing_files: List[str], command: str
             console.print(f"  ❌ {b}")
             
         if command == "git-push":
+            if non_interactive:
+                console.print("[bold red]Non-interactive mode: push blocked. Remove or whitelist the files above.[/bold red]")
+                return False
             console.print("\n[bold yellow]Do you want to strip these private files from the payload and push ONLY the public files?[/bold yellow]")
             if typer.confirm("Automatically remove private files from this commit?"):
                 console.print("[cyan]Applying Git Amendments...[/cyan]")

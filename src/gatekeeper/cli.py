@@ -79,7 +79,10 @@ def install():
     install_shims()
 
 @app.command("check")
-def check(command: str = typer.Argument(..., help="The command to check (e.g. npm-publish, git-push)")):
+def check(
+    command: str = typer.Argument(..., help="The command to check (e.g. npm-publish, git-push)"),
+    non_interactive: bool = typer.Option(False, "--non-interactive", help="Run without prompts (used by git hooks and CI)"),
+):
     """
     Intercept and evaluate a publish/push command.
     """
@@ -88,7 +91,18 @@ def check(command: str = typer.Argument(..., help="The command to check (e.g. np
     from gatekeeper.evaluator import evaluate_payload, check_bloat
     from gatekeeper.shims import get_npm_publish_files, get_git_push_files
     from gatekeeper.config import GATEKEEPER_CONFIG_FILE
-    
+
+    # Prevent double-invocation: shell shim runs us, hands back to real git,
+    # which fires the pre-push hook, which would run us again.
+    if os.environ.get("GATEKEEPER_RUNNING"):
+        return
+    os.environ["GATEKEEPER_RUNNING"] = "1"
+
+    # Also treat as non-interactive if stdin is not a TTY (e.g. pipe from git hook)
+    import sys
+    if not sys.stdin.isatty():
+        non_interactive = True
+
     console.print(f"[bold cyan]GateKeeper intercepting:[/bold cyan] {command}")
     project_root = Path(os.getcwd())
     
@@ -104,7 +118,7 @@ def check(command: str = typer.Argument(..., help="The command to check (e.g. np
         raise typer.Exit(code=1)
         
     # Global Bloat Check (Runs even if GateKeeper isn't initialized!)
-    bloat_res = check_bloat(project_root, outgoing_files, command)
+    bloat_res = check_bloat(project_root, outgoing_files, command, non_interactive=non_interactive)
     if bloat_res == -1:
         console.print(f"\n[bold red]❌ {command.upper()} ABORTED BY GATEKEEPER.[/bold red]")
         raise typer.Exit(code=1)
@@ -135,7 +149,7 @@ def check(command: str = typer.Argument(..., help="The command to check (e.g. np
             console.print(f"\n[bold red]❌ {command.upper()} ABORTED BY GATEKEEPER.[/bold red]")
             raise typer.Exit(code=1)
         
-    if not evaluate_payload(project_root, outgoing_files, command):
+    if not evaluate_payload(project_root, outgoing_files, command, non_interactive=non_interactive):
         console.print(f"\n[bold red]❌ {command.upper()} ABORTED BY GATEKEEPER.[/bold red]")
         raise typer.Exit(code=1)
         
