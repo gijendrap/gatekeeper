@@ -7,7 +7,7 @@ name = "gatekeeper-cli"
 version = "0.1.4"
 description = "Zero-Trust Pre-Publish Firewall"
 authors = [
-    { name = "Gijendra", email = "gijendra.gj@gmail.com" }
+    { name = "Gijendrap", email = "gijendra.gj@gmail.com" }
 ]
 readme = "README.md"
 license = { text = "MIT" }
