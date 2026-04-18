@@ -127,7 +127,7 @@ def install_git_hook(project_root: Path):
             return
             
     hook_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(hook_path, "a", encoding="utf-8") as f:
+    with open(hook_path, "a", encoding="utf-8", newline="\n") as f:
         f.write("\n" + hook_script)
         
     st = os.stat(hook_path)
