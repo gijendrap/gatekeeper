@@ -3,6 +3,7 @@ import platform
 import urllib.request
 import zipfile
 import tarfile
+import hashlib
 from pathlib import Path
 from rich.console import Console
 
@@ -38,6 +39,30 @@ def get_download_url() -> str:
     url = f"https://github.com/gitleaks/gitleaks/releases/download/v{GITLEAKS_VERSION}/gitleaks_{GITLEAKS_VERSION}_{os_name}_{arch}.{ext}"
     return url
 
+def verify_checksum(file_path: Path, version: str, filename: str):
+    url = f"https://github.com/gitleaks/gitleaks/releases/download/v{version}/checksums.txt"
+    try:
+        req = urllib.request.urlopen(url)
+        checksums = req.read().decode("utf-8")
+    except Exception as e:
+        file_path.unlink(missing_ok=True)
+        raise RuntimeError(f"Could not fetch checksums.txt: {e}")
+        
+    expected_sha = None
+    for line in checksums.splitlines():
+        if filename in line:
+            expected_sha = line.split()[0]
+            break
+            
+    if not expected_sha:
+        file_path.unlink(missing_ok=True)
+        raise RuntimeError(f"Could not find checksum for {filename} in checksums.txt")
+        
+    actual_sha = hashlib.sha256(file_path.read_bytes()).hexdigest()
+    if actual_sha != expected_sha:
+        file_path.unlink()
+        raise RuntimeError(f"Checksum mismatch for {filename}! Expected {expected_sha}, got {actual_sha}")
+
 def ensure_gitleaks() -> Path:
     """
     Ensures that the gitleaks binary is downloaded and available.
@@ -54,6 +79,8 @@ def ensure_gitleaks() -> Path:
     console.print(f"[cyan]Downloading Gitleaks v{GITLEAKS_VERSION} for your system...[/cyan]")
     try:
         urllib.request.urlretrieve(url, archive_path)
+        
+        verify_checksum(archive_path, GITLEAKS_VERSION, archive_path.name)
         
         if archive_path.suffix == ".zip":
             with zipfile.ZipFile(archive_path, 'r') as zip_ref:

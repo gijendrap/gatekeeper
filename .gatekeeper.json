@@ -1,19 +1,6 @@
 {
   "public_whitelist": [
-    ".gitignore",
-    "README.md",
-    "src/gatekeeper/__pycache__/cli.cpython-312.pyc",
-    ".github",
-    "LICENSE",
-    ".pytest_cache",
-    "main.txt",
-    "tests",
-    ".mypy_cache",
-    ".gatekeeper.json",
-    "pyproject.toml",
-    "dist"
+    "."
   ],
-  "private_blacklist": [
-    "src"
-  ]
+  "private_blacklist": []
 }

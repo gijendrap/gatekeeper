@@ -1,4 +1,5 @@
 import os
+import stat
 from pathlib import Path
 from rich.console import Console
 import typer
@@ -112,3 +113,22 @@ def install_shims():
     else:
         console.print("[bold red]Invalid option. Aborting.[/bold red]")
         raise typer.Exit(code=1)
+
+def install_git_hook(project_root: Path):
+    hook_path = project_root / ".git" / "hooks" / "pre-push"
+    if not (project_root / ".git").exists():
+        return
+    
+    hook_script = "#!/bin/sh\ngatekeeper check git-push\nif [ $? -ne 0 ]; then\n  exit 1\nfi\n"
+    
+    if hook_path.exists():
+        content = hook_path.read_text(encoding="utf-8")
+        if "gatekeeper check git-push" in content:
+            return
+            
+    hook_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(hook_path, "a", encoding="utf-8") as f:
+        f.write("\n" + hook_script)
+        
+    st = os.stat(hook_path)
+    os.chmod(hook_path, st.st_mode | stat.S_IEXEC)
