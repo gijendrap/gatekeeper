@@ -3,4 +3,4 @@ GateKeeper CLI
 Zero-Trust Pre-Publish Firewall.
 """
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
