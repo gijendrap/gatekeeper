@@ -30,7 +30,10 @@ def get_git_push_files(project_root: Path) -> List[str]:
     """
     Collect every file touched by any unpushed commit by enumerating
     all unpushed SHAs via git log and diffing each one individually.
-    Falls back to git ls-files when no remote tracking branch exists.
+    Falls back to git ls-files ONLY when no remote tracking branch exists
+    (i.e. first-ever push). If the upstream exists but there are zero
+    unpushed commits (e.g. a tag push), returns [] immediately so that
+    GateKeeper does not incorrectly scan/amend already-pushed commits.
     Uses shell=False throughout to avoid shell-injection risk.
     """
     files: set = set()
@@ -43,7 +46,11 @@ def get_git_push_files(project_root: Path) -> List[str]:
             capture_output=True,
             text=True,
         )
-        if sha_result.returncode == 0 and sha_result.stdout.strip():
+        if sha_result.returncode == 0:
+            if not sha_result.stdout.strip():
+                # Upstream exists but there are no unpushed commits.
+                # This happens during tag-only pushes — nothing to check.
+                return []
             shas = [s.strip() for s in sha_result.stdout.splitlines() if s.strip()]
             for sha in shas:
                 try:
@@ -65,7 +72,8 @@ def get_git_push_files(project_root: Path) -> List[str]:
     except Exception:
         pass
 
-    # Step 2: Fallback — no remote exists, list all tracked files
+    # Step 2: Fallback — upstream command failed entirely, meaning no remote
+    # tracking branch exists yet (first push). List all tracked files.
     try:
         ls_result = subprocess.run(
             ["git", "ls-files"],
@@ -79,3 +87,4 @@ def get_git_push_files(project_root: Path) -> List[str]:
         pass
 
     return []
+
