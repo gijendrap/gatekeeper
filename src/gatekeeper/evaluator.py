@@ -196,7 +196,39 @@ def evaluate_payload(project_root: Path, outgoing_files: List[str], command: str
     if not outgoing_files:
         console.print("[yellow]No outgoing files to check.[/yellow]")
         return True
-        
+
+    # --- Security Policy Tamper Guard ---
+    # If .gatekeeper.json itself is being modified in this push, it means the
+    # whitelist (security policy) is changing. This must never happen silently.
+    POLICY_FILE = ".gatekeeper.json"
+    policy_being_modified = any(
+        Path(f).as_posix() == POLICY_FILE or Path(f).name == POLICY_FILE
+        for f in outgoing_files
+    )
+    if policy_being_modified:
+        if non_interactive:
+            console.print("\n[bold red]❌ PUSH BLOCKED: .gatekeeper.json is being modified.[/bold red]")
+            console.print("[red]Security policy changes must be reviewed interactively — they cannot pass through CI or git hooks silently.[/red]")
+            return False
+        else:
+            console.print("\n[bold yellow]⚠️  WARNING: This push modifies the GateKeeper security policy (.gatekeeper.json)[/bold yellow]")
+            console.print("[dim]Showing what changed:[/dim]")
+            try:
+                diff_result = subprocess.run(
+                    ["git", "diff", "HEAD", POLICY_FILE],
+                    cwd=project_root, capture_output=True, text=True
+                )
+                if diff_result.returncode == 0 and diff_result.stdout.strip():
+                    console.print(diff_result.stdout)
+                else:
+                    # New file being added for the first time
+                    console.print("[dim](New policy file being committed for the first time.)[/dim]")
+            except Exception:
+                pass
+            if not typer.confirm("\nThe security policy is changing. Do you want to proceed?"):
+                console.print("[bold red]❌ Push aborted. Review your .gatekeeper.json changes before pushing.[/bold red]")
+                return False
+
     blocked_files = check_ip_whitelist(project_root, outgoing_files)
     
     if blocked_files:

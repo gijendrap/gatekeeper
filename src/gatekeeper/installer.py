@@ -44,16 +44,27 @@ def install_git_hook(project_root: Path) -> None:
 
 BASH_ZSH_SHIM = """
 # >>> GateKeeper Shims >>>
+# NOTE: The pre-push git hook is the primary protection layer.
+# These shims add interactive prompts and are optional enhanced UX.
+# They gracefully fall through if gatekeeper is not found in PATH.
 npm() {
     if [[ "$1" == "publish" ]]; then
-        gatekeeper check npm-publish && command npm "$@"
+        if command -v gatekeeper &>/dev/null; then
+            gatekeeper check npm-publish && command npm "$@"
+        else
+            command npm "$@"
+        fi
     else
         command npm "$@"
     fi
 }
 git() {
     if [[ "$1" == "push" ]]; then
-        gatekeeper check git-push && command git "$@"
+        if command -v gatekeeper &>/dev/null; then
+            gatekeeper check git-push && command git "$@"
+        else
+            command git "$@"
+        fi
     else
         command git "$@"
     fi
@@ -63,10 +74,15 @@ git() {
 
 POWERSHELL_SHIM = """
 # >>> GateKeeper Shims >>>
+# NOTE: The pre-push git hook is the primary protection layer.
+# These shims add interactive prompts and are optional enhanced UX.
+# They gracefully fall through if gatekeeper is not found in PATH.
 function npm {
     if ($args[0] -eq "publish") {
-        gatekeeper check npm-publish
-        if ($LASTEXITCODE -eq 0) {
+        if (Get-Command gatekeeper -ErrorAction SilentlyContinue) {
+            gatekeeper check npm-publish
+            if ($LASTEXITCODE -eq 0) { & "npm.cmd" @args }
+        } else {
             & "npm.cmd" @args
         }
     } else {
@@ -75,8 +91,10 @@ function npm {
 }
 function git {
     if ($args[0] -eq "push") {
-        gatekeeper check git-push
-        if ($LASTEXITCODE -eq 0) {
+        if (Get-Command gatekeeper -ErrorAction SilentlyContinue) {
+            gatekeeper check git-push
+            if ($LASTEXITCODE -eq 0) { & "git.exe" @args }
+        } else {
             & "git.exe" @args
         }
     } else {
@@ -94,8 +112,10 @@ def is_already_installed(file_path: Path) -> bool:
 
 def install_shims():
     console.print("\n[bold green]Installing GateKeeper Shell Shims...[/bold green]")
-    console.print("This will intercept `npm publish` and `git push` directly in your terminal.")
-    console.print("Which shell environment do you want to secure?")
+    console.print("This adds interactive prompts to `npm publish` and `git push` in your terminal.")
+    console.print("[dim]Note: The pre-push git hook (installed by `gatekeeper init`) is the PRIMARY protection layer.")
+    console.print("These shims are optional enhanced UX — they gracefully fall through if GateKeeper is not in PATH.[/dim]")
+    console.print("Which shell environment do you want to enhance?")
     console.print("  [1] [cyan]Bash / Zsh[/cyan] (~/.bashrc or ~/.zshrc)")
     console.print("  [2] [cyan]PowerShell[/cyan] ($PROFILE)")
     

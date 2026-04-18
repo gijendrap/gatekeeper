@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gatekeeper-cli"
-version = "0.1.3"
+version = "0.1.4"
 description = "Zero-Trust Pre-Publish Firewall"
 authors = [
     { name = "Gijendra", email = "gijendra.gj@gmail.com" }

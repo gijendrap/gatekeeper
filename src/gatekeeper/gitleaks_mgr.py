@@ -86,19 +86,37 @@ def verify_checksum(file_path: Path, version: str, filename: str) -> None:
 
 def ensure_gitleaks() -> Path:
     """
-    Ensures that the gitleaks binary is downloaded and available.
-    Returns the Path to the executable.
+    Returns the path to a usable gitleaks binary.
+
+    Resolution priority:
+      1. System-installed gitleaks (brew / choco / apt) — preferred, no supply chain risk
+      2. Cached ~/.gatekeeper/bin/gitleaks — already downloaded and verified
+      3. Auto-download from GitHub Releases (SHA-256 verified) — last resort
     """
+    import shutil
+
+    # Priority 1: system-installed binary
+    sys_gitleaks = shutil.which("gitleaks")
+    if sys_gitleaks:
+        return Path(sys_gitleaks)
+
+    # Priority 2: previously cached download
     if GITLEAKS_BIN.exists() and os.access(GITLEAKS_BIN, os.X_OK):
         return GITLEAKS_BIN
 
+    # Priority 3: auto-download (last resort)
+    console.print(f"[cyan]Downloading Gitleaks v{GITLEAKS_VERSION} for your system...[/cyan]")
+    console.print("[dim]Tip: Install gitleaks via your system package manager to avoid runtime downloads:[/dim]")
+    console.print("[dim]  macOS:   brew install gitleaks[/dim]")
+    console.print("[dim]  Windows: choco install gitleaks[/dim]")
+    console.print("[dim]  Linux:   apt install gitleaks  (or see https://github.com/gitleaks/gitleaks)[/dim]")
+
     BIN_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     url, filename = get_download_url()
     ext = url.split(".")[-1]
     archive_path = BIN_DIR / f"gitleaks_archive.{ext}"
-    
-    console.print(f"[cyan]Downloading Gitleaks v{GITLEAKS_VERSION} for your system...[/cyan]")
+
     try:
         urllib.request.urlretrieve(url, archive_path)
 
@@ -106,32 +124,27 @@ def ensure_gitleaks() -> Path:
         console.print("[dim]Verifying checksum...[/dim]")
         verify_checksum(archive_path, GITLEAKS_VERSION, filename)
         console.print("[dim]✅ Checksum verified.[/dim]")
-        
+
         if archive_path.suffix == ".zip":
             with zipfile.ZipFile(archive_path, 'r') as zip_ref:
                 zip_ref.extractall(BIN_DIR)
         else:
-            # Handle .tar.gz
             with tarfile.open(archive_path, 'r:gz') as tar_ref:
                 tar_ref.extractall(BIN_DIR)
-                
+
         # Clean up archive
         archive_path.unlink()
-        
+
         # Ensure executable permissions on Unix
         if platform.system().lower() != "windows":
             GITLEAKS_BIN.chmod(0o755)
-            
+
         console.print("[bold green]✅ Gitleaks downloaded successfully![/bold green]")
         return GITLEAKS_BIN
-        
+
     except Exception as e:
         console.print(f"[bold red]Failed to auto-download Gitleaks: {e}[/bold red]")
         console.print("[yellow]Please install gitleaks manually and ensure it is in your system PATH.[/yellow]")
-        # Fallback to checking if it's already in the system PATH
-        import shutil
-        sys_gitleaks = shutil.which("gitleaks")
-        if sys_gitleaks:
-            return Path(sys_gitleaks)
         raise RuntimeError("Gitleaks is required but could not be downloaded or found.")
+
 
