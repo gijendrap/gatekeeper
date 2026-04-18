@@ -87,21 +87,36 @@ def check(
     Intercept and evaluate a publish/push command.
     """
     import os
+    import sys
+    import time
     from pathlib import Path
     from gatekeeper.evaluator import evaluate_payload, check_bloat
     from gatekeeper.shims import get_npm_publish_files, get_git_push_files
     from gatekeeper.config import GATEKEEPER_CONFIG_FILE
 
-    # Prevent double-invocation: shell shim runs us, hands back to real git,
-    # which fires the pre-push hook, which would run us again.
-    if os.environ.get("GATEKEEPER_RUNNING"):
-        return
-    os.environ["GATEKEEPER_RUNNING"] = "1"
-
-    # Also treat as non-interactive if stdin is not a TTY (e.g. pipe from git hook)
-    import sys
+    # Also treat as non-interactive if stdin is not a TTY (e.g. piped by git hook)
     if not sys.stdin.isatty():
         non_interactive = True
+
+    # --- Clearance-token check (non-interactive / hook path only) ---
+    # When the interactive shell-shim run passes all checks it writes a token.
+    # The pre-push hook (--non-interactive) honours that token if it is < 60 s
+    # old, then deletes it so it cannot be reused.
+    GATEKEEPER_DIR = Path.home() / ".gatekeeper"
+    CLEARANCE_TOKEN = GATEKEEPER_DIR / "push_cleared_at"
+    CLEARANCE_TTL = 60  # seconds
+
+    if non_interactive and command == "git-push":
+        if CLEARANCE_TOKEN.exists():
+            try:
+                cleared_at = float(CLEARANCE_TOKEN.read_text(encoding="utf-8").strip())
+                if time.time() - cleared_at < CLEARANCE_TTL:
+                    console.print("[dim cyan]GateKeeper pre-push hook: shell-shim already cleared this push — skipping.[/dim cyan]")
+                    CLEARANCE_TOKEN.unlink(missing_ok=True)
+                    return  # exit 0 — let git proceed
+            except Exception:
+                pass
+            CLEARANCE_TOKEN.unlink(missing_ok=True)
 
     console.print(f"[bold cyan]GateKeeper intercepting:[/bold cyan] {command}")
     project_root = Path(os.getcwd())
@@ -152,6 +167,15 @@ def check(
     if not evaluate_payload(project_root, outgoing_files, command, non_interactive=non_interactive):
         console.print(f"\n[bold red]❌ {command.upper()} ABORTED BY GATEKEEPER.[/bold red]")
         raise typer.Exit(code=1)
+
+    # All checks passed — write a clearance token so the pre-push hook (if it
+    # fires seconds later) knows it can skip its own check safely.
+    if not non_interactive and command == "git-push":
+        try:
+            GATEKEEPER_DIR.mkdir(parents=True, exist_ok=True)
+            CLEARANCE_TOKEN.write_text(str(time.time()), encoding="utf-8")
+        except Exception:
+            pass  # token is best-effort; failure must not block the push
         
     console.print(f"\n[bold green]✅ {command.upper()} IS SAFE TO PROCEED (Handing back to actual process).[/bold green]")
 
