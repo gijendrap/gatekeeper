@@ -43,16 +43,12 @@ def init():
     
     choice = typer.prompt("Choose an option (1/2/3)", type=int)
     
-    from gatekeeper.installer import install_git_hook
-
     if choice == 1:
         save_whitelist(project_root, {"."}) # "." means the root directory, making everything public
-        install_git_hook(project_root)
         console.print("\n[bold green]✅ Project marked as Open-Source (All Public).[/bold green]")
         return
     elif choice == 2:
         save_whitelist(project_root, set()) # Empty set means nothing is public
-        install_git_hook(project_root)
         console.print("\n[bold green]✅ Project marked as Private App (All Private).[/bold green]")
         return
     elif choice == 3:
@@ -68,8 +64,6 @@ def init():
     ui = GateKeeperTUI()
     result = ui.run()
     if result:
-        from gatekeeper.installer import install_git_hook
-        install_git_hook(project_root)
         console.print(f"[bold blue]{result}[/bold blue]")
 
 @app.command("install")

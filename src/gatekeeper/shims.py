@@ -16,7 +16,7 @@ def get_npm_publish_files(project_root: Path) -> List[str]:
             cwd=project_root, 
             capture_output=True, 
             text=True,
-            shell=False 
+            shell=True 
         )
         if result.returncode != 0:
             return []
@@ -32,52 +32,27 @@ def get_git_push_files(project_root: Path) -> List[str]:
     Fetch files changed between local HEAD and remote tracking branch.
     Includes multiple fallbacks if the tracking branch hasn't been established yet.
     """
-    touched_files = set()
-    try:
-        # Collect all unpushed commit SHAs
-        result = subprocess.run(
-            ["git", "log", "--format=%H", "@{u}..HEAD"],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            shell=False
-        )
-        out = result.stdout.strip()
-        if result.returncode == 0:
-            if not out:
-                return [] # No unpushed commits
-            shas = [line.strip() for line in out.splitlines() if line.strip()]
-            for sha in shas:
-                diff_res = subprocess.run(
-                    ["git", "diff-tree", "--no-commit-id", "-r", "--name-only", sha],
-                    cwd=project_root,
-                    capture_output=True,
-                    text=True,
-                    shell=False
-                )
-                diff_out = diff_res.stdout.strip()
-                if diff_res.returncode == 0 and diff_out:
-                    for line in diff_out.splitlines():
-                        if line.strip():
-                            touched_files.add(line.strip())
-            return list(touched_files)
-    except Exception:
-        pass
-        
-    # Fallback to ls-files
-    try:
-        result = subprocess.run(
-            ["git", "ls-files"],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            shell=False
-        )
-        out = result.stdout.strip()
-        if result.returncode == 0 and out:
-            return [line.strip() for line in out.splitlines() if line.strip()]
-    except Exception:
-        pass
-        
+    strategies = [
+        ["git", "diff", "--name-only", "@{u}..HEAD"],
+        ["git", "diff", "--name-only", "origin/main...HEAD"],
+        ["git", "diff", "--name-only", "origin/master...HEAD"],
+        ["git", "ls-files"]
+    ]
+    
+    for cmd in strategies:
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+                shell=True
+            )
+            out = result.stdout.strip()
+            if result.returncode == 0 and out:
+                return [line.strip() for line in out.splitlines() if line.strip()]
+        except Exception:
+            continue
+            
     return []
 

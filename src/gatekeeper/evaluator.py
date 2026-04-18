@@ -15,12 +15,6 @@ import tempfile
 from gatekeeper.gitleaks_mgr import ensure_gitleaks
 
 ABSOLUTE_BANNED_EXTENSIONS = {".map", ".env", ".pem", ".key", ".log", ".p8"}
-ABSOLUTE_BANNED_FILENAMES = {
-    ".env", ".env.local", ".env.production", ".env.development", 
-    "secrets.json", "secrets.yaml", "secrets.yml", "credentials.json", 
-    "credentials.yaml", "serviceaccountkey.json", "firebase-adminsdk.json", 
-    "id_rsa", "id_ed25519", "id_ecdsa", ".htpasswd", "wp-config.php"
-}
 BLOAT_DIRECTORIES = {"venv", ".venv", "node_modules", "__pycache__", "dist", ".env"}
 
 def check_bloat(project_root: Path, outgoing_files: List[str], command: str) -> int:
@@ -87,12 +81,6 @@ def check_ip_whitelist(project_root: Path, outgoing_files: List[str]) -> List[st
         norm_f = Path(f).as_posix()
         
         # Immediate Hard-Ban Check: Certain extensions are universally forbidden regardless of UI selection
-        filename_lower = Path(f).name.lower()
-        if filename_lower in ABSOLUTE_BANNED_FILENAMES:
-            blocked_files.append(norm_f)
-            console.print(f"[bold red]🚫 CRITICAL BAN:[/bold red] {norm_f} is a universally forbidden secret file!")
-            continue
-            
         if Path(f).suffix.lower() in ABSOLUTE_BANNED_EXTENSIONS:
             blocked_files.append(norm_f)
             console.print(f"[bold red]🚫 CRITICAL BAN:[/bold red] {norm_f} contains a forbidden file extension!")
